@@ -1129,15 +1129,15 @@ function ListItemModal({ item, hypeIdx, onList, onClose }) {
 }
 
 // ── RESULT SCREEN ──
-function ResultScreen({ result, onRestart }) {
+function ResultScreen({ result, session, onRestart }) {
   const { myNW, cash, stockVal, cryptoVal, realVal, goldVal=0, commVal=0, gWin, gLoss, bots, winner } = result;
   const start = 20000;
   const pnl = myNW - start;
   const pct = ((pnl/start)*100).toFixed(1);
   const allPlayers = [
-    {name:"คุณ",nw:myNW,isMe:true},
-    ...(bots||[]).map(b=>({name:b.name,nw:b.nw}))
-  ].sort((a,b)=>b.nw-a.nw);
+  {name:result.nick||session?.nick||"คุณ", nw:myNW, isMe:true},
+  ...(bots||[]).map(b=>({name:b.nick||b.name||"Bot", nw:b.nw}))
+].sort((a,b)=>b.nw-a.nw);
   const myRank = allPlayers.findIndex(p=>p.isMe)+1;
 
   return (
@@ -2428,8 +2428,8 @@ const handleLobbyStart = (s) => {
     <GameScreen session={session} initPlayers={players} client={clientRef.current} onEnd={r=>{ setResult(r); setScreen("result"); }}/>
   );
   if (screen==="result") return (
-    <ResultScreen result={result} onRestart={()=>{ setResult(null); setSession(null); setPlayers([]); setScreen("lobby"); }}/>
-  );
+  <ResultScreen result={result} session={session} onRestart={()=>{ setResult(null); setSession(null); setPlayers([]); setScreen("lobby"); }}/>
+);
   return null;
 }
 
