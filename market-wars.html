@@ -226,6 +226,117 @@ const genCode = () => Math.random().toString(36).slice(2,8).toUpperCase();
 const calcNW = (cash, hold, prices) =>
   cash + Object.entries(hold).reduce((s,[id,q]) => s + (prices[id]||0)*q, 0);
 
+// ── SOUND ENGINE ──
+const _snd = {
+  _ctx: null,
+  ctx() { if (!this._ctx) try { this._ctx = new (window.AudioContext||window.webkitAudioContext)(); } catch(e){} return this._ctx; },
+  tone(freq, dur, type='sine', vol=0.2, delay=0) {
+    const ac=this.ctx(); if (!ac) return;
+    try {
+      const o=ac.createOscillator(), g=ac.createGain();
+      o.connect(g); g.connect(ac.destination);
+      o.type=type; o.frequency.value=freq;
+      const t=ac.currentTime+delay;
+      g.gain.setValueAtTime(vol, t);
+      g.gain.exponentialRampToValueAtTime(0.001, t+dur);
+      o.start(t); o.stop(t+dur);
+    } catch(e){}
+  },
+  play(name) {
+    const t=this.tone.bind(this);
+    if (name==='buy')     { t(523,0.08,'sine',0.18); t(659,0.12,'sine',0.2,0.08); }
+    else if (name==='sell')  { t(659,0.08,'sine',0.18); t(523,0.12,'sine',0.2,0.08); }
+    else if (name==='short') { t(415,0.08,'sawtooth',0.12); t(330,0.12,'sawtooth',0.12,0.09); }
+    else if (name==='event') { t(330,0.06,'sine',0.14); t(415,0.06,'sine',0.14,0.07); t(523,0.18,'sine',0.18,0.14); }
+    else if (name==='jackpot'){ [523,659,784,1047].forEach((f,i)=>t(f,0.18,'sine',0.28,i*0.1)); }
+    else if (name==='win')   { t(523,0.1,'sine',0.18); t(659,0.1,'sine',0.2,0.1); t(784,0.2,'sine',0.22,0.2); }
+    else if (name==='alert') { t(880,0.05,'square',0.1); t(660,0.08,'square',0.1,0.06); }
+  }
+};
+
+// ── CONFETTI ──
+function Confetti({ active }) {
+  const canvasRef = useRef(null);
+  useEffect(() => {
+    if (!active) return;
+    const canvas = canvasRef.current; if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    canvas.width = window.innerWidth; canvas.height = window.innerHeight;
+    const COLORS = ['#4ade80','#38bdf8','#fbbf24','#f472b6','#a78bfa','#fb923c','#f87171'];
+    const pieces = Array.from({length:90}, () => ({
+      x: Math.random()*canvas.width, y: -10,
+      w: 5+Math.random()*8, h: 3+Math.random()*6,
+      c: COLORS[Math.floor(Math.random()*COLORS.length)],
+      vx: (Math.random()-0.5)*3, vy: 2+Math.random()*4,
+      angle: Math.random()*Math.PI*2, spin: (Math.random()-0.5)*0.2,
+    }));
+    let raf;
+    const draw = () => {
+      ctx.clearRect(0,0,canvas.width,canvas.height);
+      let alive=0;
+      pieces.forEach(p=>{
+        if (p.y<canvas.height+10) {
+          alive++; p.y+=p.vy; p.x+=p.vx; p.angle+=p.spin;
+          ctx.save(); ctx.translate(p.x,p.y); ctx.rotate(p.angle);
+          ctx.fillStyle=p.c; ctx.fillRect(-p.w/2,-p.h/2,p.w,p.h); ctx.restore();
+        }
+      });
+      if (alive>0) raf=requestAnimationFrame(draw);
+    };
+    raf=requestAnimationFrame(draw);
+    return () => cancelAnimationFrame(raf);
+  }, [active]);
+  if (!active) return null;
+  return <canvas ref={canvasRef} style={{position:'fixed',inset:0,zIndex:9998,pointerEvents:'none'}}/>;
+}
+
+// ── DONUT CHART ──
+function DonutChart({ data, size=110 }) {
+  const total = data.reduce((s,d)=>s+d.v,0)||1;
+  const R=size/2-10, cx=size/2, cy=size/2, sw=16, circ=2*Math.PI*R;
+  let off=0;
+  const segs = data.filter(d=>d.v>0).map(d=>{
+    const pct=d.v/total, dash=pct*circ, rot=off*360-90;
+    off+=pct;
+    return {...d, dash, gap:circ-dash, rot};
+  });
+  return (
+    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} style={{display:'block'}}>
+      {segs.map((s,i)=>(
+        <circle key={i} cx={cx} cy={cy} r={R} fill="none" stroke={s.c} strokeWidth={sw}
+          strokeDasharray={`${s.dash} ${s.gap}`} transform={`rotate(${s.rot},${cx},${cy})`}
+          style={{transition:'all 0.5s'}}/>
+      ))}
+      <circle cx={cx} cy={cy} r={R-sw/2-2} fill="#0c1421"/>
+    </svg>
+  );
+}
+
+// ── TICKER TAPE ──
+const TickerTape = React.memo(function TickerTape({ assets, prices, hists }) {
+  const items = assets.map(a=>{
+    const p=prices[a.id]||a.bp, hist=hists[a.id]||[];
+    const up=hist.length>1&&hist[hist.length-1]>=hist[0];
+    const pct=hist.length>1?((hist[hist.length-1]-hist[0])/hist[0]*100):0;
+    return {a,p,up,pct};
+  });
+  const tile = items.map(({a,p,up,pct},i)=>(
+    <span key={i} style={{display:'inline-flex',alignItems:'center',gap:4,padding:'0 14px',flexShrink:0,whiteSpace:'nowrap'}}>
+      <span style={{fontSize:11}}>{a.emoji}</span>
+      <span style={{color:a.color,fontWeight:700,fontSize:8}}>{a.id}</span>
+      <span style={{color:'#ffffff66',fontSize:8}}>{fmtP(a,p)}</span>
+      <span style={{color:up?'#4ade80':'#f87171',fontSize:8}}>{up?'▲':'▼'}{Math.abs(pct).toFixed(1)}%</span>
+    </span>
+  ));
+  return (
+    <div style={{overflow:'hidden',background:'#ffffff02',borderBottom:'1px solid #ffffff08',height:24,display:'flex',alignItems:'center'}}>
+      <div style={{display:'flex',animation:'ticker-scroll 50s linear infinite',width:'max-content'}}>
+        {tile}{tile}
+      </div>
+    </div>
+  );
+});
+
 function AnimNum({ value, color, size=18, bold=true }) {
   const [disp, setDisp] = useState(value);
   const [flash, setFlash] = useState(null);
@@ -455,7 +566,10 @@ function WaitingRoom({ session, client, onGo, players, setPlayers }) {
 
   const addBot = () => {
     if (players.length >= 8) return;
-    setPlayers(p => [...p,{id:`b${p.length}`,name:BOT_NAMES[p.length-1]||`Bot${p.length}`,ready:true,isBot:true}]);
+    setPlayers(p => {
+      const botCount = p.filter(x=>x.isBot).length;
+      return [...p, {id:`b${Date.now()}`, nick:BOT_NAMES[botCount]||`Bot${botCount+1}`, name:BOT_NAMES[botCount]||`Bot${botCount+1}`, ready:true, isBot:true}];
+    });
   };
   const toggleReady = () => {
     if (client?.ok) {
@@ -464,12 +578,13 @@ function WaitingRoom({ session, client, onGo, players, setPlayers }) {
       setPlayers(p=>p.map(x=>x.isMe?{...x,ready:!x.ready}:x));
     }
   };
-  const canStart = players.length >= 2 && me?.ready;
+  const isOffline = !client?.ok;
+  const canStart = isOffline ? players.length >= 2 : (players.length >= 2 && me?.ready);
   const doStart = () => {
     if (client?.ok) {
       client.start();
     } else {
-      onGo(players); // offline fallback
+      onGo(players);
     }
   };
   const endLabel = session.endMode==="target" ? `🎯 ${fmt(session.target)}` : `⏱️ ${session.duration/60}min`;
@@ -539,6 +654,7 @@ function Modal({ onClose, title, children }) {
         width:"100%",maxWidth:480,borderRadius:"20px 20px 0 0",
         background:"#0d1829",border:"1px solid #ffffff12",
         borderBottom:"none",padding:20,maxHeight:"90vh",overflowY:"auto",
+        animation:"modal-slide-up 0.3s cubic-bezier(0.34,1.2,0.64,1)",
       }}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:18}}>
           <div style={{fontSize:14,fontWeight:700,color:"#fff"}}>{title}</div>
@@ -1446,6 +1562,33 @@ function GameScreen({ session, initPlayers, client, onEnd }) {
   const [board,      setBoard]      = useState([]);
   const onlineRef = useRef(!!(client?.ok));
 
+  // ── NEW: flash / ticker / trade history / confetti ──
+  const [flashMap,      setFlashMap]     = useState({});
+  const prevPricesR    = useRef({...Object.fromEntries(gameAssets.map(a=>[a.id,a.bp]))});
+  const tradeHistoryR  = useRef([]);
+  const [tradeHistory, setTradeHistory] = useState([]);
+  const [confetti,     setConfetti]     = useState(false);
+  const tickerSnapR    = useRef({prices:{...Object.fromEntries(gameAssets.map(a=>[a.id,a.bp]))}, hists:{}});
+  const [tickerSnap,   setTickerSnap]   = useState(tickerSnapR.current);
+
+  const addTrade = useCallback((entry) => {
+    tradeHistoryR.current = [{...entry, time:Date.now(), id:`tr${Date.now()}`}, ...tradeHistoryR.current].slice(0,60);
+    setTradeHistory([...tradeHistoryR.current]);
+  }, []);
+
+  const triggerFlash = useCallback((newPrices) => {
+    const changes = {};
+    Object.entries(newPrices).forEach(([id,p]) => {
+      const prev = prevPricesR.current[id];
+      if (prev && Math.abs((p-prev)/prev) > 0.025) changes[id] = p>prev?'up':'dn';
+    });
+    prevPricesR.current = {...newPrices};
+    if (Object.keys(changes).length > 0) {
+      setFlashMap(changes);
+      setTimeout(()=>setFlashMap({}), 700);
+    }
+  }, []);
+
   // ── ONLINE: รับ messages จาก server ──
   useEffect(() => {
     if (!client || !client.ok) { onlineRef.current=false; return; }
@@ -1458,16 +1601,29 @@ function GameScreen({ session, initPlayers, client, onEnd }) {
       origCb(msg); // ส่ง global messages ต่อ
       switch(msg.type) {
         case "TICK":
-          if(msg.prices){ priceR.current={...msg.prices}; setPrices({...msg.prices}); }
-        if(msg.prices){
-    Object.entries(msg.prices).forEach(([id,p])=>{
-      if(!histR.current[id]) histR.current[id]=[];
-      histR.current[id]=[...histR.current[id],p].slice(-60);
-    });
-  }
+          if(msg.prices){
+            triggerFlash(msg.prices);
+            priceR.current={...msg.prices}; setPrices({...msg.prices});
+            Object.entries(msg.prices).forEach(([id,p])=>{
+              if(!histR.current[id]) histR.current[id]=[];
+              histR.current[id]=[...histR.current[id],p].slice(-60);
+            });
+            // Update ticker every 8 ticks
+            if(!tickR.current) tickR.current=0; tickR.current++;
+            if(tickR.current%8===0){ tickerSnapR.current={prices:{...msg.prices},hists:{...histR.current}}; setTickerSnap({...tickerSnapR.current}); }
+          }
           if(msg.timeLeft!==undefined) setTimeLeft(msg.timeLeft);
           if(msg.phase) setPhase(msg.phase);
-          if(msg.activeEvent!==undefined) setActiveEv(msg.activeEvent);
+          if(msg.activeEvent!==undefined) {
+            const wasActive = !!evR.current;
+            evR.current = msg.activeEvent || null;
+            if(msg.activeEvent && !wasActive) {
+              _snd.play('event');
+              setActiveEv({...msg.activeEvent, _ts:Date.now()});
+            } else {
+              setActiveEv(msg.activeEvent || null);
+            }
+          }
           if(msg.eventTimer!==undefined) setEvTimer(msg.eventTimer);
           if(msg.hypeIdx) { hypeIdxR.current={...msg.hypeIdx}; setHypeIdx({...msg.hypeIdx}); }
           if(msg.board) setBoard(msg.board);
@@ -1506,8 +1662,8 @@ function GameScreen({ session, initPlayers, client, onEnd }) {
           showNotif(msg.msg,"#fbbf24");
           break;
         case "EVENT":
-          setActiveEv(msg.event);
-          showNotif(msg.event.title,"#fbbf24");
+          setActiveEv({...msg.event, _ts:Date.now()});
+          _snd.play('event');
           break;
         case "MINI_EVENT":
           if(msg.assetId&&priceR.current[msg.assetId]){
@@ -1521,6 +1677,8 @@ function GameScreen({ session, initPlayers, client, onEnd }) {
             cashR.current=msg.cash; setCash(msg.cash);
             gWinR.current=msg.gWin||0; gLossR.current=msg.gLoss||0;
             setGWin(gWinR.current); setGLoss(gLossR.current);
+            if (msg.win && msg.amount>=3000) { _snd.play('jackpot'); setConfetti(true); setTimeout(()=>setConfetti(false),4000); }
+            else if (msg.win && msg.amount>0) _snd.play('win');
             showNotif(msg.msg,msg.win?"#4ade80":"#f87171");
           } else { showNotif(`❌ ${msg.msg}`,"#f87171"); setModal(null); }
           break;
@@ -1552,11 +1710,38 @@ function GameScreen({ session, initPlayers, client, onEnd }) {
     setTimeout(()=>setNotif(null),2500);
   },[]);
 
+  // ── KEYBOARD SHORTCUTS ──
+  useEffect(() => {
+    const TABS = ['market','portfolio','hype','gamble','rank','chat','history'];
+    const handler = (e) => {
+      if (e.target.tagName==="INPUT"||e.target.tagName==="TEXTAREA") return;
+      if (modal) { if (e.key==="Escape") setModal(null); return; }
+      switch(e.key) {
+        case "Escape": setSelAsset(null); break;
+        case "b": case "B": if (selAsset) setModal("buy"); break;
+        case "s": case "S": if (selAsset && (holdR.current[selAsset.id]||0)>0) setModal("sell"); break;
+        case "1": setTab("market"); break;
+        case "2": setTab("portfolio"); break;
+        case "3": setTab("hype"); break;
+        case "4": setTab("gamble"); break;
+        case "5": setTab("rank"); break;
+        case "6": setTab("chat"); break;
+        case "7": setTab("history"); break;
+      }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [modal, selAsset]);
+
   const syncCash  = () => setCash(cashR.current);
   const syncHold  = () => setHold({...holdR.current});
   const syncBasis = () => setBasis({...basisR.current});
   const syncShort = () => setShort({...shortR.current});
-  const myNW = () => calcNW(cashR.current, holdR.current, priceR.current);
+  const myNW = () => {
+    const holdVal = Object.entries(holdR.current).reduce((s,[id,q])=>s+(priceR.current[id]||0)*q, 0);
+    const shortObl = Object.entries(shortR.current).reduce((s,[id,pos])=>s+(priceR.current[id]||0)*pos.qty, 0);
+    return cashR.current + holdVal - shortObl;
+  };
 
   const chatSeqR = useRef(0);
   const addChatMsg = useCallback((player, text, isMe=false) => {
@@ -1664,12 +1849,20 @@ function GameScreen({ session, initPlayers, client, onEnd }) {
   const endGame = useCallback((winnerName=null) => {
     if (doneR.current) return;
     doneR.current = true;
-    const finalNW = calcNW(cashR.current, holdR.current, priceR.current);
+    const p=priceR.current, h=holdR.current;
+    const holdVal = Object.entries(h).reduce((s,[id,q])=>s+(p[id]||0)*q, 0);
+    const shortObl = Object.entries(shortR.current).reduce((s,[id,pos])=>s+(p[id]||0)*pos.qty, 0);
+    const finalNW = cashR.current + holdVal - shortObl;
+    const sv = gameAssets.filter(a=>a.type==="stock").reduce((s,a)=>s+(p[a.id]||0)*(h[a.id]||0),0);
+    const cv = gameAssets.filter(a=>a.type==="crypto").reduce((s,a)=>s+(p[a.id]||0)*(h[a.id]||0),0);
+    const rv = gameAssets.filter(a=>a.type==="realestate").reduce((s,a)=>s+(p[a.id]||0)*(h[a.id]||0),0);
+    const gv = gameAssets.filter(a=>a.type==="gold").reduce((s,a)=>s+(p[a.id]||0)*(h[a.id]||0),0);
+    const mv = gameAssets.filter(a=>a.type==="commodity").reduce((s,a)=>s+(p[a.id]||0)*(h[a.id]||0),0);
     onEnd({
-      myNW: finalNW, cash:cashR.current, stockVal, cryptoVal, realVal, goldVal, commVal,
+      myNW:finalNW, cash:cashR.current, stockVal:sv, cryptoVal:cv, realVal:rv, goldVal:gv, commVal:mv,
       gWin:gWinR.current, gLoss:gLossR.current, bots:botsR.current, winner:winnerName,
     });
-  },[onEnd, stockVal, cryptoVal, realVal, goldVal, commVal]);
+  },[onEnd, gameAssets]);
 
   // รับ GAME_OVER จาก server
   useEffect(() => {
@@ -1719,15 +1912,20 @@ function GameScreen({ session, initPlayers, client, onEnd }) {
           );
           histR.current[a.id] = [...(histR.current[a.id]||[]), priceR.current[a.id]].slice(-60);
         });
+        triggerFlash({...priceR.current});
         setPrices({...priceR.current});
+        if (tickR.current % 8 === 0) {
+          tickerSnapR.current={prices:{...priceR.current},hists:{...histR.current}};
+          setTickerSnap({...tickerSnapR.current});
+        }
       }
 
       nextEvR.current--;
       if (nextEvR.current <= 0) {
         const ev = EVENTS[Math.floor(Math.random()*EVENTS.length)];
         evR.current = ev; evTimerR.current = ev.dur;
-        setActiveEv(ev); setEvTimer(ev.dur);
-        showNotif(ev.title, "#fbbf24");
+        setActiveEv({...ev, _ts:Date.now()}); setEvTimer(ev.dur);
+        _snd.play('event');
         // RE/Gold ได้ income bonus เมื่อ event ดีๆ เกิด
         if((ev.eff.realestate||0)>0.1){
           const bonus=["CONDO","HOUSE","MALL"].reduce((s,id)=>s+((holdR.current[id]||0)*(ASSETS.find(a=>a.id===id)||{inc:0}).inc*3),0);
@@ -1934,48 +2132,57 @@ function GameScreen({ session, initPlayers, client, onEnd }) {
   }, [cfg, gameAssets, botTick, showNotif, endGame, session, addChatMsg]);
 
   const doBuy = (q) => {
-    if (onlineRef.current && client?.ok) {
-      client.buy(selAsset.id, q); // server จะตอบกลับ TRADE_RESULT
-      setModal(null); return;
-    }
-    // offline
     const p = priceR.current[selAsset.id]||selAsset.bp;
     const cost = p * q;
+    if (onlineRef.current && client?.ok) {
+      client.buy(selAsset.id, q);
+      _snd.play('buy');
+      addTrade({type:'buy',asset:selAsset,qty:q,price:p,total:cost});
+      setModal(null); return;
+    }
     if (cashR.current < cost) { showNotif("❌ เงินไม่พอ","#f87171"); return; }
     cashR.current -= cost;
     holdR.current[selAsset.id] = (holdR.current[selAsset.id]||0)+q;
     basisR.current[selAsset.id] = (basisR.current[selAsset.id]||0)+cost;
     syncCash(); syncHold(); syncBasis();
+    _snd.play('buy');
+    addTrade({type:'buy',asset:selAsset,qty:q,price:p,total:cost});
     showNotif(`▲ ซื้อ ${selAsset.name} ×${q}  −${fmt(cost)}`, "#4ade80");
     setModal(null);
   };
 
   const doSell = (q) => {
+    const p = priceR.current[selAsset.id]||selAsset.bp;
+    const gain = p * q;
     if (onlineRef.current && client?.ok) {
       client.sell(selAsset.id, q);
+      _snd.play('sell');
+      addTrade({type:'sell',asset:selAsset,qty:q,price:p,total:gain});
       setModal(null); return;
     }
     const have = holdR.current[selAsset.id]||0;
     if (have < q) { showNotif("❌ ไม่มีพอขาย","#f87171"); return; }
-    const p = priceR.current[selAsset.id]||selAsset.bp;
-    const gain = p * q;
     cashR.current += gain;
     holdR.current[selAsset.id] = have - q;
     const avgCost = (basisR.current[selAsset.id]||0) / Math.max(have,1) * q;
     basisR.current[selAsset.id] = Math.max(0, (basisR.current[selAsset.id]||0) - avgCost);
     syncCash(); syncHold(); syncBasis();
+    _snd.play('sell');
+    addTrade({type:'sell',asset:selAsset,qty:q,price:p,total:gain});
     showNotif(`▼ ขาย ${selAsset.name} ×${q}  +${fmt(gain)}`, "#38bdf8");
     setModal(null);
   };
 
   const doShort = (q) => {
+    const p = priceR.current[selAsset.id]||selAsset.bp;
+    const receive = p * q;
     if (onlineRef.current && client?.ok) {
       client.send("TRADE", { action:"short", assetId:selAsset.id, qty:q });
+      _snd.play('short');
+      addTrade({type:'short',asset:selAsset,qty:q,price:p,total:receive});
       setModal(null); return;
     }
-    const p = priceR.current[selAsset.id]||selAsset.bp;
     if (p * q > cashR.current) { showNotif(`❌ Short เกิน cash (max ${Math.floor(cashR.current/p)} หน่วย)`,"#f87171"); return; }
-    const receive = p * q;
     cashR.current += receive;
     const ex = shortR.current[selAsset.id];
     if (ex) {
@@ -1985,25 +2192,31 @@ function GameScreen({ session, initPlayers, client, onEnd }) {
       shortR.current[selAsset.id] = { qty: q, openPrice: p };
     }
     syncCash(); syncShort();
+    _snd.play('short');
+    addTrade({type:'short',asset:selAsset,qty:q,price:p,total:receive});
     showNotif(`⬇ Short ${selAsset.name} ×${q} รับ +${fmt(receive)}`, "#f87171");
     setModal(null);
   };
 
   const doCover = (q) => {
+    const pos = shortR.current[selAsset.id];
+    const p = priceR.current[selAsset.id]||selAsset.bp;
+    const pnl = pos ? (pos.openPrice - p) * q : 0;
     if (onlineRef.current && client?.ok) {
       client.send("TRADE", { action:"cover", assetId:selAsset.id, qty:q });
+      _snd.play(pnl>=0?'win':'sell');
+      addTrade({type:'cover',asset:selAsset,qty:q,price:p,total:pnl});
       setModal(null); return;
     }
-    const pos = shortR.current[selAsset.id];
     if (!pos || pos.qty < q) { showNotif("❌ ไม่มี short position พอ","#f87171"); return; }
-    const p = priceR.current[selAsset.id]||selAsset.bp;
     const cost = p * q;
     if (cashR.current < cost) { showNotif("❌ เงินไม่พอ cover","#f87171"); return; }
-    const pnl = (pos.openPrice - p) * q;
     cashR.current -= cost;
     if (q >= pos.qty) delete shortR.current[selAsset.id];
     else shortR.current[selAsset.id] = { qty: pos.qty - q, openPrice: pos.openPrice };
     syncCash(); syncShort();
+    _snd.play(pnl>=0?'win':'sell');
+    addTrade({type:'cover',asset:selAsset,qty:q,price:p,total:pnl});
     showNotif(`↑ Cover ${selAsset.name} ×${q} ${pnl>=0?"+":""}${fmt(pnl)}`, pnl>=0?"#4ade80":"#f87171");
     setModal(null);
   };
@@ -2021,13 +2234,15 @@ function GameScreen({ session, initPlayers, client, onEnd }) {
     if (onlineRef.current && client?.ok) {
       const costs={lottery:100,scratch:50,crash:200,flip:300,roulette:150};
       client.gamble(modal, costs[modal]||100, res.choice||null);
-      setModal(null); // ปิด modal เสมอ ไม่ว่า online หรือ offline
+      setModal(null);
       return;
     }
     // offline
     if (res.win && res.amount > 0) {
       cashR.current += res.amount; gWinR.current += res.amount;
       syncCash(); setGWin(gWinR.current);
+      if (res.amount >= 3000) { _snd.play('jackpot'); setConfetti(true); setTimeout(()=>setConfetti(false),4000); }
+      else _snd.play('win');
       showNotif(res.msg, "#4ade80");
     } else {
       const costs = {lottery:100,scratch:50,crash:200,flip:300,roulette:150};
@@ -2168,10 +2383,25 @@ const myRank = allP.findIndex(p=>p.isMe)+1;
         </div>
       </div>
 
+      <TickerTape assets={gameAssets} prices={tickerSnap.prices} hists={tickerSnap.hists}/>
+
       {activeEv && (
-        <div style={{margin:"7px 14px",padding:"9px 13px",borderRadius:9,background:"#fbbf2410",border:"1px solid #fbbf2828",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-          <div style={{color:"#fbbf24",fontWeight:700,fontSize:12}}>{activeEv.title}</div>
-          <div style={{color:"#fbbf24",fontWeight:900,fontSize:14}}>{evTimer}s</div>
+        <div key={activeEv._ts||activeEv.id} style={{
+          margin:"7px 14px",padding:"10px 14px",borderRadius:10,
+          background:"linear-gradient(135deg,#fbbf2412,#fbbf2406)",
+          border:"1px solid #fbbf2835",
+          display:"flex",justifyContent:"space-between",alignItems:"center",
+          animation:"event-banner-in 0.4s cubic-bezier(0.34,1.56,0.64,1)",
+          boxShadow:"0 2px 12px #fbbf2412",
+        }}>
+          <div>
+            <div style={{fontSize:8,letterSpacing:3,color:"#fbbf2466",marginBottom:2}}>MARKET EVENT</div>
+            <div style={{color:"#fbbf24",fontWeight:700,fontSize:13}}>{activeEv.title}</div>
+          </div>
+          <div style={{textAlign:"right",flexShrink:0,marginLeft:12}}>
+            <div style={{fontSize:18,fontWeight:900,color:"#fbbf24",lineHeight:1,fontVariantNumeric:"tabular-nums"}}>{evTimer}s</div>
+            <div style={{fontSize:7,color:"#fbbf2455",marginTop:2}}>เหลือ</div>
+          </div>
         </div>
       )}
       {intelEv && (
@@ -2182,9 +2412,10 @@ const myRank = allP.findIndex(p=>p.isMe)+1;
       )}
 
       {notif && (
-        <div style={{position:"fixed",top:74,left:"50%",transform:"translateX(-50%)",padding:"8px 18px",borderRadius:22,zIndex:999,
-          background:`${notif.color}12`,border:`1px solid ${notif.color}38`,color:notif.color,fontSize:12,fontWeight:700,
-          whiteSpace:"nowrap",pointerEvents:"none",backdropFilter:"blur(10px)",boxShadow:`0 4px 16px ${notif.color}1a`,
+        <div key={notif.id} style={{position:"fixed",top:74,left:"50%",transform:"translateX(-50%)",padding:"9px 20px",borderRadius:24,zIndex:999,
+          background:`${notif.color}15`,border:`1px solid ${notif.color}40`,color:notif.color,fontSize:12,fontWeight:700,
+          whiteSpace:"nowrap",pointerEvents:"none",backdropFilter:"blur(12px)",boxShadow:`0 4px 20px ${notif.color}20`,
+          animation:"notif-in 0.28s cubic-bezier(0.34,1.56,0.64,1)",
         }}>{notif.msg}</div>
       )}
 
@@ -2215,6 +2446,7 @@ const myRank = allP.findIndex(p=>p.isMe)+1;
           {k:"hype",      l:"🎴 กระแส"},
           {k:"gamble",    l:"🎲 Gamble"},
           {k:"rank",      l:"🏆 Rank"},
+          {k:"history",   l:`📋 ประวัติ${tradeHistory.length>0?` ${tradeHistory.length}`:""}`},
           {k:"chat",      l:`💬 แชท${chatMsgs.length>0?" ·":""}`},
         ].map(({k,l})=>(
           <button key={k} onClick={()=>setTab(k)} style={{
@@ -2226,7 +2458,7 @@ const myRank = allP.findIndex(p=>p.isMe)+1;
         ))}
       </div>
 
-      <div style={{padding:"10px 14px"}}>
+      <div key={tab} style={{padding:"10px 14px",animation:"tab-in 0.2s ease"}}>
 
         {/* MARKET TAB */}
         {tab==="market" && (
@@ -2280,12 +2512,12 @@ const myRank = allP.findIndex(p=>p.isMe)+1;
                   </div>
                 )}
                 <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:7}}>
-                  <button onClick={()=>setModal("buy")} style={{padding:"11px 0",borderRadius:10,border:"1px solid #4ade8055",background:"#4ade8012",color:"#4ade80",cursor:"pointer",fontSize:12,fontWeight:900,fontFamily:G.font}}>▲ ซื้อ</button>
-                  <button onClick={()=>selHave>0&&setModal("sell")} disabled={selHave===0} style={{padding:"11px 0",borderRadius:10,border:`1px solid ${selHave>0?"#f8717155":"#ffffff10"}`,background:selHave>0?"#f8717112":"#ffffff05",color:selHave>0?"#f87171":"#ffffff25",cursor:selHave>0?"pointer":"not-allowed",fontSize:12,fontWeight:900,fontFamily:G.font}}>▼ ขาย</button>
+                  <button onClick={()=>setModal("buy")} style={{padding:"11px 0",borderRadius:10,border:"1px solid #4ade8055",background:"#4ade8012",color:"#4ade80",cursor:"pointer",fontSize:12,fontWeight:900,fontFamily:G.font,boxShadow:"0 2px 8px #4ade8010"}}>▲ ซื้อ</button>
+                  <button onClick={()=>selHave>0&&setModal("sell")} disabled={selHave===0} style={{padding:"11px 0",borderRadius:10,border:`1px solid ${selHave>0?"#f8717155":"#ffffff10"}`,background:selHave>0?"#f8717112":"#ffffff05",color:selHave>0?"#f87171":"#ffffff25",cursor:selHave>0?"pointer":"not-allowed",fontSize:12,fontWeight:900,fontFamily:G.font,boxShadow:selHave>0?"0 2px 8px #f8717110":"none"}}>▼ ขาย</button>
                   {short[selAsset?.id] ? (
-                    <button onClick={()=>setModal("cover")} style={{padding:"11px 0",borderRadius:10,border:"1px solid #4ade8055",background:"#4ade8012",color:"#4ade80",cursor:"pointer",fontSize:12,fontWeight:900,fontFamily:G.font}}>↑ Cover</button>
+                    <button onClick={()=>setModal("cover")} style={{padding:"11px 0",borderRadius:10,border:"1px solid #4ade8055",background:"#4ade8012",color:"#4ade80",cursor:"pointer",fontSize:12,fontWeight:900,fontFamily:G.font,boxShadow:"0 2px 8px #4ade8010"}}>↑ Cover</button>
                   ) : (
-                    <button onClick={()=>setModal("short")} style={{padding:"11px 0",borderRadius:10,border:"1px solid #f8717155",background:"#f8717112",color:"#f87171",cursor:"pointer",fontSize:12,fontWeight:900,fontFamily:G.font}}>⬇ Short</button>
+                    <button onClick={()=>setModal("short")} style={{padding:"11px 0",borderRadius:10,border:"1px solid #f8717155",background:"#f8717112",color:"#f87171",cursor:"pointer",fontSize:12,fontWeight:900,fontFamily:G.font,boxShadow:"0 2px 8px #f8717110"}}>⬇ Short</button>
                   )}
                 </div>
               </div>
@@ -2300,33 +2532,53 @@ const myRank = allP.findIndex(p=>p.isMe)+1;
                 const pct = hist.length>1 ? ((hist[hist.length-1]-hist[0])/hist[0]*100) : 0;
                 const hv = hold[a.id]||0;
                 const isSel = selAsset?.id===a.id;
+                const fl = flashMap[a.id];
                 return (
-                  <button key={a.id} onClick={()=>setSelAsset(isSel?null:a)} style={{
-                    display:"flex",justifyContent:"space-between",alignItems:"center",
-                    padding:"10px 12px",borderRadius:11,cursor:"pointer",fontFamily:G.font,textAlign:"left",
+                  <div key={a.id} style={{
+                    display:"flex",alignItems:"center",
+                    borderRadius:11,
                     border:`1px solid ${isSel?a.color+"55":"#ffffff08"}`,
                     background:isSel?`${a.color}0a`:"#ffffff04",
-                    transition:"all .15s",
+                    animation:fl?(fl==='up'?'price-flash-up 0.7s ease':'price-flash-dn 0.7s ease'):'none',
+                    transition:"border-color .15s, background .15s",
+                    overflow:"hidden",
                   }}>
-                    <div style={{display:"flex",alignItems:"center",gap:10}}>
-                      <span style={{fontSize:18}}>{a.emoji}</span>
-                      <div>
-                        <div style={{fontSize:12,fontWeight:700,color:a.color}}>{a.name}</div>
-                        <div style={{fontSize:9,color:"#ffffff33"}}>
-                          {a.id}{hv>0?` · ถือ ${hv}`:""}
-                          {short[a.id]&&<span style={{marginLeft:4,color:"#f87171",fontSize:8}}>⬇Short ×{short[a.id].qty}</span>}
-                          {a.inc&&<span style={{marginLeft:4,color:a.type==="realestate"?"#fbbf24":a.type==="gold"?"#f59e0b":"#86efac",fontSize:8}}>+{fmt(a.inc)}/30s</span>}
+                    <button onClick={()=>setSelAsset(isSel?null:a)} style={{
+                      flex:1,display:"flex",justifyContent:"space-between",alignItems:"center",
+                      padding:"10px 12px",cursor:"pointer",fontFamily:G.font,textAlign:"left",
+                      background:"transparent",border:"none",
+                    }}>
+                      <div style={{display:"flex",alignItems:"center",gap:10}}>
+                        <span style={{fontSize:18}}>{a.emoji}</span>
+                        <div>
+                          <div style={{fontSize:12,fontWeight:700,color:a.color}}>{a.name}</div>
+                          <div style={{fontSize:9,color:"#ffffff33"}}>
+                            {a.id}{hv>0?` · ถือ ${hv}`:""}
+                            {short[a.id]&&<span style={{marginLeft:4,color:"#f87171",fontSize:8}}>⬇Short ×{short[a.id].qty}</span>}
+                            {a.inc&&<span style={{marginLeft:4,color:a.type==="realestate"?"#fbbf24":a.type==="gold"?"#f59e0b":"#86efac",fontSize:8}}>+{fmt(a.inc)}/30s</span>}
+                          </div>
                         </div>
                       </div>
-                    </div>
-                    <div style={{display:"flex",alignItems:"center",gap:8}}>
-                      <Spark hist={hist} up={up} w={48} h={18}/>
-                      <div style={{textAlign:"right",minWidth:70}}>
-                        <div style={{fontSize:12,fontWeight:700,color:a.color}}>{fmtP(a,p)}</div>
-                        <div style={{fontSize:9,color:up?"#4ade80":"#f87171"}}>{up?"▲":"▼"} {Math.abs(pct).toFixed(1)}%</div>
+                      <div style={{display:"flex",alignItems:"center",gap:8}}>
+                        <Spark hist={hist} up={up} w={48} h={18}/>
+                        <div style={{textAlign:"right",minWidth:68}}>
+                          <div style={{fontSize:12,fontWeight:700,color:a.color}}>{fmtP(a,p)}</div>
+                          <div style={{fontSize:9,color:up?"#4ade80":"#f87171"}}>{up?"▲":"▼"} {Math.abs(pct).toFixed(1)}%</div>
+                        </div>
                       </div>
+                    </button>
+                    {/* Quick Trade Buttons */}
+                    <div style={{display:"flex",flexDirection:"column",gap:2,padding:"4px 6px 4px 0",flexShrink:0}}>
+                      <button onClick={()=>{setSelAsset(a);setModal("buy");}} style={{
+                        padding:"4px 7px",borderRadius:5,border:"1px solid #4ade8033",background:"#4ade8012",
+                        color:"#4ade80",cursor:"pointer",fontSize:9,fontFamily:G.font,fontWeight:700,
+                      }}>▲</button>
+                      {hv>0&&<button onClick={()=>{setSelAsset(a);setModal("sell");}} style={{
+                        padding:"4px 7px",borderRadius:5,border:"1px solid #f8717133",background:"#f8717112",
+                        color:"#f87171",cursor:"pointer",fontSize:9,fontFamily:G.font,fontWeight:700,
+                      }}>▼</button>}
                     </div>
-                  </button>
+                  </div>
                 );
               })}
             </div>
@@ -2338,20 +2590,33 @@ const myRank = allP.findIndex(p=>p.isMe)+1;
           <div>
             <div style={{background:G.panel,borderRadius:14,padding:16,marginBottom:12,border:`1px solid ${G.border}`}}>
               <div style={{fontSize:9,letterSpacing:3,color:"#ffffff20",marginBottom:10}}>สรุปพอร์ต</div>
-              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:12}}>
-                {[
-                  {l:"📈 หุ้น",v:stockVal,c:"#38bdf8"},
-                  {l:"🪙 Crypto",v:cryptoVal,c:"#818cf8"},
-                  {l:"🏠 อสังหาฯ",v:realVal,c:"#f87171"},
-                  {l:"🥇 ทอง",v:goldVal,c:"#f59e0b"},
-                  {l:"🛢 สินค้า",v:commVal,c:"#67e8f9"},
-                  {l:"💵 เงินสด",v:cash,c:"#4ade80"},
-                ].map(({l,v,c})=>(
-                  <div key={l} style={{textAlign:"center",background:"#ffffff05",borderRadius:8,padding:"8px 4px",border:"1px solid #ffffff08"}}>
-                    <div style={{fontSize:9,color:"#ffffff33",marginBottom:3}}>{l}</div>
-                    <div style={{fontSize:11,fontWeight:700,color:v>0?c:"#ffffff22"}}>{fmt(v)}</div>
-                  </div>
-                ))}
+              {/* Donut + Stats side by side */}
+              <div style={{display:"flex",gap:12,alignItems:"center",marginBottom:12}}>
+                <div style={{flexShrink:0}}>
+                  <DonutChart size={110} data={[
+                    {v:stockVal,  c:"#38bdf8"},
+                    {v:cryptoVal, c:"#818cf8"},
+                    {v:realVal,   c:"#f87171"},
+                    {v:goldVal,   c:"#f59e0b"},
+                    {v:commVal,   c:"#67e8f9"},
+                    {v:cash,      c:"#4ade80"},
+                  ]}/>
+                </div>
+                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6,flex:1}}>
+                  {[
+                    {l:"📈 หุ้น",v:stockVal,c:"#38bdf8"},
+                    {l:"🪙 Crypto",v:cryptoVal,c:"#818cf8"},
+                    {l:"🏠 อสังหาฯ",v:realVal,c:"#f87171"},
+                    {l:"🥇 ทอง",v:goldVal,c:"#f59e0b"},
+                    {l:"🛢 สินค้า",v:commVal,c:"#67e8f9"},
+                    {l:"💵 เงินสด",v:cash,c:"#4ade80"},
+                  ].map(({l,v,c})=>(
+                    <div key={l} style={{textAlign:"center",background:"#ffffff05",borderRadius:7,padding:"6px 4px",border:"1px solid #ffffff08"}}>
+                      <div style={{fontSize:8,color:"#ffffff33",marginBottom:2}}>{l}</div>
+                      <div style={{fontSize:10,fontWeight:700,color:v>0?c:"#ffffff22"}}>{fmt(v)}</div>
+                    </div>
+                  ))}
+                </div>
               </div>
               <div style={{display:"flex",gap:4}}>
                 {[
@@ -2607,6 +2872,53 @@ const myRank = allP.findIndex(p=>p.isMe)+1;
           </div>
         )}
 
+        {/* HISTORY TAB */}
+        {tab==="history" && (
+          <div>
+            <div style={{fontSize:9,letterSpacing:3,color:"#ffffff20",marginBottom:10}}>ประวัติการซื้อขาย ({tradeHistory.length} รายการ)</div>
+            {tradeHistory.length===0 ? (
+              <div style={{textAlign:"center",padding:"40px 20px",color:"#ffffff22",fontSize:11}}>ยังไม่มีประวัติ<br/>ซื้อขายก่อนนะ!</div>
+            ) : (
+              <div style={{display:"flex",flexDirection:"column",gap:5}}>
+                {tradeHistory.map(tr=>{
+                  const typeMap = {
+                    buy:  {label:"▲ ซื้อ",  color:"#4ade80"},
+                    sell: {label:"▼ ขาย",   color:"#38bdf8"},
+                    short:{label:"⬇ Short", color:"#f87171"},
+                    cover:{label:"↑ Cover", color:"#c084fc"},
+                  };
+                  const tm = typeMap[tr.type]||{label:tr.type,color:"#fff"};
+                  const time = new Date(tr.time).toLocaleTimeString('th',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
+                  const isReceive = tr.type==='buy'||tr.type==='short';
+                  const amtColor = tr.type==='cover'?(tr.total>=0?"#4ade80":"#f87171"):tm.color;
+                  const amtLabel = tr.type==='buy'   ? `-${fmt(tr.total)}`
+                                 : tr.type==='sell'  ? `+${fmt(tr.total)}`
+                                 : tr.type==='short' ? `+${fmt(tr.total)}`
+                                 : `${tr.total>=0?"+":""}${fmt(tr.total)}`;
+                  return (
+                    <div key={tr.id} style={{
+                      display:"flex",justifyContent:"space-between",alignItems:"center",
+                      padding:"9px 12px",borderRadius:9,
+                      background:"#ffffff04",border:"1px solid #ffffff08",
+                    }}>
+                      <div style={{display:"flex",alignItems:"center",gap:8}}>
+                        <span style={{fontSize:14}}>{tr.asset?.emoji||"?"}</span>
+                        <div>
+                          <div style={{fontSize:11,fontWeight:700,color:tm.color}}>{tm.label} {tr.asset?.name}</div>
+                          <div style={{fontSize:8,color:"#ffffff33"}}>{time} · ×{tr.qty} @ {fmtP(tr.asset,tr.price)}</div>
+                        </div>
+                      </div>
+                      <div style={{textAlign:"right"}}>
+                        <div style={{fontSize:12,fontWeight:700,color:amtColor}}>{amtLabel}</div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
+
         {/* CHAT TAB */}
         {tab==="chat" && (
           <div style={{display:"flex",flexDirection:"column",height:"62vh"}}>
@@ -2658,6 +2970,9 @@ const myRank = allP.findIndex(p=>p.isMe)+1;
           color:"#f87171",cursor:"pointer",fontSize:10,fontFamily:G.font,fontWeight:700}}>🏁 จบเกม</button>
       </div>
 
+      {/* CONFETTI */}
+      <Confetti active={confetti}/>
+
       {/* MODALS */}
       {listModal && <ListItemModal item={listModal} onList={(p)=>listItem(listModal,p)} onClose={()=>setListModal(null)}/>}
       {modal==="buy"   && selAsset && <BuyModal   asset={selAsset} price={selP} maxCash={cash} onBuy={doBuy} onClose={()=>setModal(null)} hist={selHist}/>}
@@ -2682,6 +2997,8 @@ function App() {
   const [wsReady, setWsReady] = useState(!ONLINE_MODE);
   const [wsError, setWsError] = useState(null);
   const clientRef = useRef(null);
+  const playerIdRef = useRef(null);
+  const handleGameEnd = useCallback((r) => { setResult(r); setScreen("result"); }, []);
 
   // init WS client ครั้งเดียว
   useEffect(() => {
@@ -2691,6 +3008,7 @@ function App() {
       if (msg.type === "DISCONNECTED"){ setWsReady(false); setWsError("หลุดการเชื่อมต่อ กำลัง reconnect..."); }
 
       if (msg.type === "JOINED") {
+        playerIdRef.current = msg.playerId;
         setSession(s => ({...s, playerId:msg.playerId, isHost:msg.isHost,
           mode:msg.mode, endMode:msg.endMode, target:msg.target, duration:msg.duration}));
         setPlayers(msg.players.map(p=>({...p,isMe:p.id===msg.playerId})));
@@ -2705,7 +3023,7 @@ if (msg.type === "PLAYER_JOINED") {
 }
 if (msg.type === "PLAYERS_UPDATE") {
   setPlayers(msg.players.map(p => ({
-    ...p, isMe: p.nick===session?.nick,
+    ...p, isMe: p.id === playerIdRef.current,
   })));
 }
       if (msg.type === "GAME_START") {
@@ -2727,7 +3045,10 @@ const handleLobbyStart = (s) => {
     clientRef.current.join(s.nick, s.code, s.mode, s.endMode, s.target, s.duration);
     setScreen("waiting");
   } else {
-    setSession(s); setScreen("waiting");
+    // offline: initialize players with the host so WaitingRoom works
+    setSession(s);
+    setPlayers([{id:"me-offline", nick:s.nick, name:s.nick, ready:true, isMe:true}]);
+    setScreen("waiting");
   }
 };
 
@@ -2752,7 +3073,7 @@ const handleLobbyStart = (s) => {
 <WaitingRoom session={session} client={clientRef.current} players={players} setPlayers={setPlayers} onGo={ps=>{ setPlayers(ps); setScreen("game"); }}/>
   );
   if (screen==="game") return (
-    <GameScreen session={session} initPlayers={players} client={clientRef.current} onEnd={r=>{ setResult(r); setScreen("result"); }}/>
+    <GameScreen session={session} initPlayers={players} client={clientRef.current} onEnd={handleGameEnd}/>
   );
   if (screen==="result") return (
   <ResultScreen result={result} session={session} onRestart={()=>{ setResult(null); setSession(null); setPlayers([]); setScreen("lobby"); }}/>
@@ -2764,6 +3085,35 @@ ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
 </script>
 <style>
 @keyframes spin { to { transform: rotate(360deg); } }
+@keyframes ticker-scroll { from { transform: translateX(0); } to { transform: translateX(-50%); } }
+@keyframes price-flash-up { 0%,100%{ background:transparent; } 25%{ background:#4ade8022; } }
+@keyframes price-flash-dn { 0%,100%{ background:transparent; } 25%{ background:#f8717122; } }
+@keyframes event-banner-in { from { opacity:0; transform:translateY(-10px) scale(0.97); } to { opacity:1; transform:translateY(0) scale(1); } }
+@keyframes notif-in { from { opacity:0; transform:translateX(-50%) translateY(-14px) scale(0.92); } to { opacity:1; transform:translateX(-50%) translateY(0) scale(1); } }
+@keyframes modal-slide-up { from { transform:translateY(40px); opacity:0; } to { transform:translateY(0); opacity:1; } }
+@keyframes fade-in { from { opacity:0; } to { opacity:1; } }
+@keyframes tab-in { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:translateY(0); } }
+
+/* ── GLOBAL BUTTON MICRO-INTERACTIONS ── */
+button {
+  transition: transform 0.12s ease, filter 0.12s ease, box-shadow 0.12s ease;
+}
+button:not(:disabled):hover {
+  filter: brightness(1.18);
+  transform: translateY(-1px);
+}
+button:not(:disabled):active {
+  transform: scale(0.94) !important;
+  filter: brightness(0.88) !important;
+}
+
+/* input range thumb animate */
+input[type=range]::-webkit-slider-thumb {
+  transition: transform 0.15s ease;
+}
+input[type=range]::-webkit-slider-thumb:hover {
+  transform: scale(1.3);
+}
 </style>
 </body>
 </html>
