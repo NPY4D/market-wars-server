@@ -553,6 +553,17 @@ function Modal({ onClose, title, children }) {
 
 function SellModal({ asset, price, maxQty, onSell, onClose, hist }) {
   const [q, setQ] = useState(1);
+  const [preset, setPreset] = useState(0); // 0=1unit 1=25% 2=50% 3=ทั้งหมด null=slider
+
+  // เมื่อ price เปลี่ยน (TICK) ให้คำนวณ q จาก preset ที่เลือกไว้
+  useEffect(() => {
+    if (preset === null) return;
+    const opts = [1, Math.max(1, Math.ceil(maxQty*0.25)), Math.max(1, Math.ceil(maxQty*0.5)), maxQty];
+    setQ(Math.max(1, Math.min(opts[preset], maxQty)));
+  }, [maxQty, preset]);
+
+  const presetOpts = [1, Math.max(1, Math.ceil(maxQty*0.25)), Math.max(1, Math.ceil(maxQty*0.5)), maxQty];
+  const presetLabels = ["1","25%","50%","ทั้งหมด"];
   const total = price * q;
   return (
     <Modal onClose={onClose} title={`▼ ขาย ${asset.emoji} ${asset.name}`}>
@@ -571,21 +582,19 @@ function SellModal({ asset, price, maxQty, onSell, onClose, hist }) {
       </div>
       <Label>จำนวนที่จะขาย</Label>
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr",gap:6,marginBottom:10}}>
-        {[1, Math.ceil(maxQty/4), Math.ceil(maxQty/2), maxQty].map((n,i) => {
-          const labels=["1","25%","50%","ทั้งหมด"];
-          return (
-            <button key={i} onClick={()=>setQ(n)} style={{
-              padding:"9px 0",borderRadius:8,cursor:"pointer",fontFamily:G.font,
-              border:`1px solid ${q===n?"#f8717155":"#ffffff10"}`,
-              background:q===n?"#f8717112":"#ffffff05",
-              color:q===n?"#f87171":"#ffffff33",fontSize:11,fontWeight:q===n?700:400,
-              transition:"all .15s",
-            }}>{labels[i]}</button>
-          );
-        })}
+        {presetOpts.map((n, i) => (
+          <button key={i} onClick={() => { setPreset(i); setQ(Math.max(1, n)); }} style={{
+            padding:"9px 0",borderRadius:8,cursor:"pointer",fontFamily:G.font,
+            border:`1px solid ${preset===i?"#f8717155":"#ffffff10"}`,
+            background:preset===i?"#f8717112":"#ffffff05",
+            color:preset===i?"#f87171":"#ffffff33",fontSize:11,fontWeight:preset===i?700:400,
+            transition:"all .15s",
+          }}>{presetLabels[i]}</button>
+        ))}
       </div>
       <div style={{marginBottom:14}}>
-        <input type="range" min={1} max={maxQty} value={q} onChange={e=>setQ(parseInt(e.target.value))}
+        <input type="range" min={1} max={maxQty} value={q}
+          onChange={e => { setPreset(null); setQ(parseInt(e.target.value)); }}
           style={{width:"100%",accentColor:"#f87171",cursor:"pointer"}}/>
         <div style={{display:"flex",justifyContent:"space-between",marginTop:4}}>
           <span style={{color:"#ffffff28",fontSize:9}}>1</span>
@@ -679,9 +688,171 @@ function PriceChart({ hist, color, asset }) {
   );
 }
 
+function ShortModal({ asset, price, maxCash, onShort, onClose, hist }) {
+  const maxQ = Math.max(1, Math.floor(maxCash / price));
+  const [q, setQ] = useState(1);
+  const [preset, setPreset] = useState(0);
+
+  useEffect(() => {
+    if (preset === null) return;
+    const opts = [1, Math.max(1,Math.floor(maxQ*0.25)), Math.max(1,Math.floor(maxQ*0.5)), maxQ];
+    setQ(Math.max(1, Math.min(opts[preset], maxQ)));
+  }, [maxQ, preset]);
+
+  const presetOpts = [1, Math.max(1,Math.floor(maxQ*0.25)), Math.max(1,Math.floor(maxQ*0.5)), maxQ];
+  const receive = price * q;
+  const liqPrice = price * 1.5;
+
+  return (
+    <Modal onClose={onClose} title={`⬇ Short ${asset.emoji} ${asset.name}`}>
+      <PriceChart hist={hist} color={asset.color} asset={asset}/>
+      <div style={{padding:"10px 13px",borderRadius:9,marginBottom:10,background:"#f8717108",border:"1px solid #f8717120"}}>
+        <div style={{fontSize:9,color:"#f87171",marginBottom:3,fontWeight:700}}>⚠️ ความเสี่ยง Short Selling</div>
+        <div style={{fontSize:9,color:"#ffffff44",lineHeight:1.6}}>
+          ค่าธรรมเนียม 0.3%/10s · Force Cover อัตโนมัติที่ <span style={{color:"#f87171"}}>{fmtP(asset,liqPrice)}</span> (+50%)
+        </div>
+      </div>
+      <div style={{padding:"12px 14px",borderRadius:10,marginBottom:14,background:`${asset.color}10`,border:`1px solid ${asset.color}25`,
+        display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+        <div>
+          <div style={{fontSize:9,color:"#ffffff33",marginBottom:2}}>ราคาปัจจุบัน</div>
+          <div style={{fontSize:18,fontWeight:900,color:asset.color}}>{fmtP(asset,price)}</div>
+        </div>
+        <div style={{textAlign:"right"}}>
+          <div style={{fontSize:9,color:"#ffffff33",marginBottom:2}}>cash ที่ใช้ค้ำประกัน</div>
+          <div style={{fontSize:14,fontWeight:900,color:"#38bdf8"}}>{fmt(maxCash)}</div>
+        </div>
+      </div>
+      <Label>จำนวนที่จะ Short</Label>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr",gap:6,marginBottom:10}}>
+        {presetOpts.map((n,i) => (
+          <button key={i} onClick={()=>{setPreset(i);setQ(Math.max(1,n));}} style={{
+            padding:"9px 0",borderRadius:8,cursor:"pointer",fontFamily:G.font,
+            border:`1px solid ${preset===i?"#f8717155":"#ffffff10"}`,
+            background:preset===i?"#f8717112":"#ffffff05",
+            color:preset===i?"#f87171":"#ffffff33",fontSize:11,fontWeight:700,transition:"all .15s",
+          }}>{"1 25% 50% Max".split(" ")[i]}</button>
+        ))}
+      </div>
+      <div style={{marginBottom:14}}>
+        <input type="range" min={1} max={Math.max(1,maxQ)} value={q}
+          onChange={e=>{setPreset(null);setQ(parseInt(e.target.value));}}
+          style={{width:"100%",accentColor:"#f87171",cursor:"pointer"}}/>
+        <div style={{display:"flex",justifyContent:"space-between",marginTop:4}}>
+          <span style={{color:"#ffffff28",fontSize:9}}>1</span>
+          <span style={{color:"#f87171",fontWeight:700,fontSize:13}}>{q} หน่วย</span>
+          <span style={{color:"#ffffff28",fontSize:9}}>{maxQ}</span>
+        </div>
+      </div>
+      <div style={{padding:"10px 14px",borderRadius:9,marginBottom:14,background:"#38bdf810",border:"1px solid #38bdf825",
+        display:"flex",justifyContent:"space-between"}}>
+        <span style={{color:"#ffffff44",fontSize:11}}>จะได้รับ (ค้ำประกัน)</span>
+        <span style={{color:"#38bdf8",fontWeight:900,fontSize:15}}>{fmt(receive)}</span>
+      </div>
+      <button onClick={()=>onShort(q)} style={{width:"100%",padding:14,borderRadius:10,border:"none",
+        background:"linear-gradient(135deg,#7f1d1d,#991b1b)",color:"#f87171",
+        cursor:"pointer",fontSize:14,fontWeight:900,fontFamily:G.font,boxShadow:"0 4px 16px #7f1d1d55",
+      }}>⬇ Short {q} หน่วย (รับ {fmt(receive)})</button>
+    </Modal>
+  );
+}
+
+function CoverModal({ asset, price, shortPos, onCover, onClose, hist }) {
+  const maxQ = shortPos.qty;
+  const [q, setQ] = useState(maxQ);
+  const [preset, setPreset] = useState(3);
+
+  useEffect(() => {
+    if (preset === null) return;
+    const opts = [1, Math.max(1,Math.ceil(maxQ*0.25)), Math.max(1,Math.ceil(maxQ*0.5)), maxQ];
+    setQ(Math.max(1, Math.min(opts[preset], maxQ)));
+  }, [maxQ, preset]);
+
+  const presetOpts = [1, Math.max(1,Math.ceil(maxQ*0.25)), Math.max(1,Math.ceil(maxQ*0.5)), maxQ];
+  const pnlPerUnit = shortPos.openPrice - price;
+  const totalPnL = pnlPerUnit * q;
+  const coverCost = price * q;
+
+  return (
+    <Modal onClose={onClose} title={`↑ Cover Short ${asset.emoji} ${asset.name}`}>
+      <PriceChart hist={hist} color={asset.color} asset={asset}/>
+      <div style={{padding:"12px 14px",borderRadius:10,marginBottom:10,background:`${asset.color}10`,border:`1px solid ${asset.color}25`,
+        display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10}}>
+        <div style={{textAlign:"center"}}>
+          <div style={{fontSize:9,color:"#ffffff33",marginBottom:2}}>เปิด Short ที่</div>
+          <div style={{fontSize:13,fontWeight:900,color:"#ffffff88"}}>{fmtP(asset,shortPos.openPrice)}</div>
+        </div>
+        <div style={{textAlign:"center",borderLeft:"1px solid #ffffff10",borderRight:"1px solid #ffffff10"}}>
+          <div style={{fontSize:9,color:"#ffffff33",marginBottom:2}}>ราคาปัจจุบัน</div>
+          <div style={{fontSize:13,fontWeight:900,color:asset.color}}>{fmtP(asset,price)}</div>
+        </div>
+        <div style={{textAlign:"center"}}>
+          <div style={{fontSize:9,color:"#ffffff33",marginBottom:2}}>P&L / หน่วย</div>
+          <div style={{fontSize:13,fontWeight:900,color:pnlPerUnit>=0?"#4ade80":"#f87171"}}>
+            {pnlPerUnit>=0?"+":""}{fmtP(asset,pnlPerUnit)}
+          </div>
+        </div>
+      </div>
+      <Label>จำนวนที่จะ Cover</Label>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr",gap:6,marginBottom:10}}>
+        {presetOpts.map((n,i) => (
+          <button key={i} onClick={()=>{setPreset(i);setQ(Math.max(1,n));}} style={{
+            padding:"9px 0",borderRadius:8,cursor:"pointer",fontFamily:G.font,
+            border:`1px solid ${preset===i?"#4ade8055":"#ffffff10"}`,
+            background:preset===i?"#4ade8012":"#ffffff05",
+            color:preset===i?"#4ade80":"#ffffff33",fontSize:11,fontWeight:700,transition:"all .15s",
+          }}>{"1 25% 50% ทั้งหมด".split(" ")[i]}</button>
+        ))}
+      </div>
+      <div style={{marginBottom:14}}>
+        <input type="range" min={1} max={maxQ} value={q}
+          onChange={e=>{setPreset(null);setQ(parseInt(e.target.value));}}
+          style={{width:"100%",accentColor:"#4ade80",cursor:"pointer"}}/>
+        <div style={{display:"flex",justifyContent:"space-between",marginTop:4}}>
+          <span style={{color:"#ffffff28",fontSize:9}}>1</span>
+          <span style={{color:"#4ade80",fontWeight:700,fontSize:13}}>{q} หน่วย</span>
+          <span style={{color:"#ffffff28",fontSize:9}}>{maxQ}</span>
+        </div>
+      </div>
+      <div style={{padding:"10px 14px",borderRadius:9,marginBottom:14,
+        background:totalPnL>=0?"#4ade8010":"#f8717110",
+        border:`1px solid ${totalPnL>=0?"#4ade8025":"#f8717125"}`,
+        display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+        <div>
+          <div style={{fontSize:9,color:"#ffffff33",marginBottom:1}}>กำไร / ขาดทุน</div>
+          <div style={{fontSize:16,fontWeight:900,color:totalPnL>=0?"#4ade80":"#f87171"}}>
+            {totalPnL>=0?"+":""}{fmt(totalPnL)}
+          </div>
+        </div>
+        <div style={{textAlign:"right"}}>
+          <div style={{fontSize:9,color:"#ffffff33",marginBottom:1}}>จ่ายเพื่อ Cover</div>
+          <div style={{fontSize:14,fontWeight:700,color:"#ffffff88"}}>{fmt(coverCost)}</div>
+        </div>
+      </div>
+      <button onClick={()=>onCover(q)} style={{width:"100%",padding:14,borderRadius:10,border:"none",
+        background:totalPnL>=0?"linear-gradient(135deg,#14532d,#166534)":"linear-gradient(135deg,#7f1d1d,#991b1b)",
+        color:totalPnL>=0?"#4ade80":"#f87171",
+        cursor:"pointer",fontSize:14,fontWeight:900,fontFamily:G.font,
+        boxShadow:`0 4px 16px ${totalPnL>=0?"#14532d":"#7f1d1d"}55`,
+      }}>↑ Cover {q} หน่วย ({totalPnL>=0?"+":""}{fmt(totalPnL)})</button>
+    </Modal>
+  );
+}
+
 function BuyModal({ asset, price, maxCash, onBuy, onClose, hist }) {
   const maxQ = Math.max(1, Math.floor(maxCash / price));
   const [q, setQ] = useState(1);
+  const [preset, setPreset] = useState(0); // 0=1unit 1=25% 2=50% 3=max null=slider
+
+  // เมื่อ price เปลี่ยน (TICK) ให้คำนวณ q จาก preset ที่เลือกไว้ ไม่ให้หลุด
+  useEffect(() => {
+    if (preset === null) return;
+    const opts = [1, Math.max(1, Math.floor(maxQ*0.25)), Math.max(1, Math.floor(maxQ*0.5)), maxQ];
+    setQ(Math.max(1, Math.min(opts[preset], maxQ)));
+  }, [maxQ, preset]);
+
+  const presetOpts = [1, Math.max(1,Math.floor(maxQ*0.25)), Math.max(1,Math.floor(maxQ*0.5)), maxQ];
+  const presetLabels = ["1","25%","50%","Max"];
   const total = price * q;
   const canBuy = total <= maxCash;
   return (
@@ -701,21 +872,19 @@ function BuyModal({ asset, price, maxCash, onBuy, onClose, hist }) {
       </div>
       <Label>จำนวนที่จะซื้อ</Label>
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr",gap:6,marginBottom:10}}>
-        {[1, Math.max(1,Math.floor(maxQ*0.25)), Math.max(1,Math.floor(maxQ*0.5)), maxQ].map((n,i) => {
-          const labels=["1","25%","50%","Max"];
-          return (
-            <button key={i} onClick={()=>setQ(Math.max(1,n))} style={{
-              padding:"9px 0",borderRadius:8,cursor:"pointer",fontFamily:G.font,
-              border:`1px solid ${q===Math.max(1,n)?"#4ade8055":"#ffffff10"}`,
-              background:q===Math.max(1,n)?"#4ade8012":"#ffffff05",
-              color:q===Math.max(1,n)?"#4ade80":"#ffffff33",fontSize:11,fontWeight:700,
-              transition:"all .15s",
-            }}>{labels[i]}</button>
-          );
-        })}
+        {presetOpts.map((n, i) => (
+          <button key={i} onClick={() => { setPreset(i); setQ(Math.max(1, n)); }} style={{
+            padding:"9px 0",borderRadius:8,cursor:"pointer",fontFamily:G.font,
+            border:`1px solid ${preset===i?"#4ade8055":"#ffffff10"}`,
+            background:preset===i?"#4ade8012":"#ffffff05",
+            color:preset===i?"#4ade80":"#ffffff33",fontSize:11,fontWeight:700,
+            transition:"all .15s",
+          }}>{presetLabels[i]}</button>
+        ))}
       </div>
       <div style={{marginBottom:14}}>
-        <input type="range" min={1} max={Math.max(1,maxQ)} value={q} onChange={e=>setQ(parseInt(e.target.value))}
+        <input type="range" min={1} max={Math.max(1,maxQ)} value={q}
+          onChange={e => { setPreset(null); setQ(parseInt(e.target.value)); }}
           style={{width:"100%",accentColor:"#4ade80",cursor:"pointer"}}/>
         <div style={{display:"flex",justifyContent:"space-between",marginTop:4}}>
           <span style={{color:"#ffffff28",fontSize:9}}>1</span>
@@ -1228,6 +1397,7 @@ function GameScreen({ session, initPlayers, client, onEnd }) {
   const cashR      = useRef(cfg.start);
   const holdR      = useRef({});
   const basisR     = useRef({});
+  const shortR     = useRef({});
   const priceR     = useRef(Object.fromEntries(gameAssets.map(a=>[a.id,a.bp])));
   const histR      = useRef(Object.fromEntries(gameAssets.map(a=>[a.id,[a.bp]])));
   const frozenR    = useRef(false);
@@ -1246,6 +1416,7 @@ function GameScreen({ session, initPlayers, client, onEnd }) {
   const [cash,     setCash]    = useState(cfg.start);
   const [hold,     setHold]    = useState({});
   const [basis,    setBasis]   = useState({});
+  const [short,    setShort]   = useState({});
   const [prices,   setPrices]  = useState(priceR.current);
   const [bots,     setBots]    = useState(botsR.current);
   const [timeLeft, setTimeLeft]= useState(session.duration||cfg.dur);
@@ -1303,9 +1474,9 @@ function GameScreen({ session, initPlayers, client, onEnd }) {
           break;
         case "TRADE_RESULT":
           if(msg.ok){
-            cashR.current=msg.cash; holdR.current={...msg.hold};
-            setCash(msg.cash); setHold({...msg.hold});
-            // อัพเดท basis เพื่อคำนวณกำไร/ขาดทุนให้ถูกต้อง
+            cashR.current=msg.cash; setCash(msg.cash);
+            if(msg.hold){ holdR.current={...msg.hold}; setHold({...msg.hold}); }
+            if(msg.short){ shortR.current={...msg.short}; setShort({...msg.short}); }
             if(msg.action==="buy" && msg.assetId && msg.cost){
               basisR.current[msg.assetId]=(basisR.current[msg.assetId]||0)+msg.cost;
             } else if(msg.action==="sell" && msg.assetId && msg.qty){
@@ -1314,12 +1485,21 @@ function GameScreen({ session, initPlayers, client, onEnd }) {
               basisR.current[msg.assetId]=Math.max(0,(basisR.current[msg.assetId]||0)-avgCost);
             }
             syncBasis();
-            showNotif(msg.action==="buy"
-              ? `▲ ซื้อ ×${msg.qty} −${fmt(msg.cost)}`
-              : `▼ ขาย ×${msg.qty} +${fmt(msg.gain)}`,
-              msg.action==="buy"?"#4ade80":"#38bdf8");
+            const notifMap = {
+              buy:   `▲ ซื้อ ×${msg.qty} −${fmt(msg.cost)}`,
+              sell:  `▼ ขาย ×${msg.qty} +${fmt(msg.gain)}`,
+              short: `⬇ Short ×${msg.qty} รับ ${fmt(msg.receive)}`,
+              cover: `↑ Cover ×${msg.qty} ${msg.pnl>=0?"+":""}${fmt(msg.pnl)}`,
+            };
+            const colorMap = { buy:"#4ade80", sell:"#38bdf8", short:"#f87171", cover: msg.pnl>=0?"#4ade80":"#f87171" };
+            showNotif(notifMap[msg.action]||"✓ done", colorMap[msg.action]||"#4ade80");
           } else { showNotif(`❌ ${msg.msg}`,"#f87171"); }
           setModal(null);
+          break;
+        case "FORCE_COVER":
+          if(msg.assetId){ delete shortR.current[msg.assetId]; syncShort(); }
+          cashR.current=Math.max(0,cashR.current); syncCash();
+          showNotif(msg.msg,"#f87171");
           break;
         case "INCOME":
           cashR.current+=msg.amount; setCash(cashR.current);
@@ -1358,6 +1538,7 @@ function GameScreen({ session, initPlayers, client, onEnd }) {
           break;
         case "REJOINED":
           cashR.current=msg.cash||cashR.current; holdR.current=msg.hold||{};
+          if(msg.short){ shortR.current={...msg.short}; setShort({...msg.short}); }
           setCash(cashR.current); setHold({...holdR.current});
           if(msg.prices){ priceR.current={...msg.prices}; setPrices({...msg.prices}); }
           break;
@@ -1371,9 +1552,10 @@ function GameScreen({ session, initPlayers, client, onEnd }) {
     setTimeout(()=>setNotif(null),2500);
   },[]);
 
-  const syncCash = () => setCash(cashR.current);
-  const syncHold = () => setHold({...holdR.current});
-  const syncBasis= () => setBasis({...basisR.current});
+  const syncCash  = () => setCash(cashR.current);
+  const syncHold  = () => setHold({...holdR.current});
+  const syncBasis = () => setBasis({...basisR.current});
+  const syncShort = () => setShort({...shortR.current});
   const myNW = () => calcNW(cashR.current, holdR.current, priceR.current);
 
   const chatSeqR = useRef(0);
@@ -1459,7 +1641,8 @@ function GameScreen({ session, initPlayers, client, onEnd }) {
   const realVal   = Object.entries(hold).filter(([id])=>gameAssets.find(a=>a.id===id&&a.type==="realestate")).reduce((s,[id,q])=>s+(prices[id]||0)*q,0);
   const goldVal   = Object.entries(hold).filter(([id])=>gameAssets.find(a=>a.id===id&&a.type==="gold")).reduce((s,[id,q])=>s+(prices[id]||0)*q,0);
   const commVal   = Object.entries(hold).filter(([id])=>gameAssets.find(a=>a.id===id&&a.type==="commodity")).reduce((s,[id,q])=>s+(prices[id]||0)*q,0);
-  const displayNW = cash + stockVal + cryptoVal + realVal + goldVal + commVal;
+  const shortObl  = Object.entries(short).reduce((s,[id,pos])=>s+(prices[id]||0)*pos.qty,0);
+  const displayNW = cash + stockVal + cryptoVal + realVal + goldVal + commVal - shortObl;
 
   const botTick = useCallback(() => {
     botsR.current = botsR.current.map(bot => {
@@ -1575,6 +1758,23 @@ function GameScreen({ session, initPlayers, client, onEnd }) {
           setCards(prev => prev.length<3?[...prev,c]:prev);
           nextCardR.current = cfg.cards ? 35 : 55;
         }
+      }
+
+      // Short fee + force cover (offline)
+      if (tickR.current % 10 === 0) {
+        Object.entries(shortR.current).forEach(([assetId, pos]) => {
+          const price = priceR.current[assetId] || 0;
+          const fee = Math.ceil(price * pos.qty * 0.003);
+          if (fee > 0) cashR.current = Math.max(0, cashR.current - fee);
+          if (price >= pos.openPrice * 1.5) {
+            const pnl = (pos.openPrice - price) * pos.qty;
+            cashR.current = Math.max(0, cashR.current - price * pos.qty);
+            delete shortR.current[assetId];
+            syncShort();
+            showNotif(`⚠️ ${assetId} Force Cover! ขาดทุน ฿${Math.abs(Math.round(pnl)).toLocaleString()}`, "#f87171");
+          }
+        });
+        syncCash(); syncShort();
       }
 
       if (tickR.current % 30 === 0) {
@@ -1752,10 +1952,9 @@ function GameScreen({ session, initPlayers, client, onEnd }) {
 
   const doSell = (q) => {
     if (onlineRef.current && client?.ok) {
-      client.sell(selAsset.id, q); // server จะตอบกลับ TRADE_RESULT
+      client.sell(selAsset.id, q);
       setModal(null); return;
     }
-    // offline
     const have = holdR.current[selAsset.id]||0;
     if (have < q) { showNotif("❌ ไม่มีพอขาย","#f87171"); return; }
     const p = priceR.current[selAsset.id]||selAsset.bp;
@@ -1766,6 +1965,46 @@ function GameScreen({ session, initPlayers, client, onEnd }) {
     basisR.current[selAsset.id] = Math.max(0, (basisR.current[selAsset.id]||0) - avgCost);
     syncCash(); syncHold(); syncBasis();
     showNotif(`▼ ขาย ${selAsset.name} ×${q}  +${fmt(gain)}`, "#38bdf8");
+    setModal(null);
+  };
+
+  const doShort = (q) => {
+    if (onlineRef.current && client?.ok) {
+      client.send("TRADE", { action:"short", assetId:selAsset.id, qty:q });
+      setModal(null); return;
+    }
+    const p = priceR.current[selAsset.id]||selAsset.bp;
+    if (p * q > cashR.current) { showNotif(`❌ Short เกิน cash (max ${Math.floor(cashR.current/p)} หน่วย)`,"#f87171"); return; }
+    const receive = p * q;
+    cashR.current += receive;
+    const ex = shortR.current[selAsset.id];
+    if (ex) {
+      const total = ex.qty + q;
+      shortR.current[selAsset.id] = { qty: total, openPrice: (ex.openPrice*ex.qty + p*q) / total };
+    } else {
+      shortR.current[selAsset.id] = { qty: q, openPrice: p };
+    }
+    syncCash(); syncShort();
+    showNotif(`⬇ Short ${selAsset.name} ×${q} รับ +${fmt(receive)}`, "#f87171");
+    setModal(null);
+  };
+
+  const doCover = (q) => {
+    if (onlineRef.current && client?.ok) {
+      client.send("TRADE", { action:"cover", assetId:selAsset.id, qty:q });
+      setModal(null); return;
+    }
+    const pos = shortR.current[selAsset.id];
+    if (!pos || pos.qty < q) { showNotif("❌ ไม่มี short position พอ","#f87171"); return; }
+    const p = priceR.current[selAsset.id]||selAsset.bp;
+    const cost = p * q;
+    if (cashR.current < cost) { showNotif("❌ เงินไม่พอ cover","#f87171"); return; }
+    const pnl = (pos.openPrice - p) * q;
+    cashR.current -= cost;
+    if (q >= pos.qty) delete shortR.current[selAsset.id];
+    else shortR.current[selAsset.id] = { qty: pos.qty - q, openPrice: pos.openPrice };
+    syncCash(); syncShort();
+    showNotif(`↑ Cover ${selAsset.name} ×${q} ${pnl>=0?"+":""}${fmt(pnl)}`, pnl>=0?"#4ade80":"#f87171");
     setModal(null);
   };
 
@@ -2029,11 +2268,25 @@ const myRank = allP.findIndex(p=>p.isMe)+1;
                   </div>
                 </div>
                 {selHave > 0 && (
-                  <div style={{fontSize:10,color:"#ffffff44",marginBottom:10}}>ถือ {selHave} หน่วย = {fmt((prices[selAsset.id]||selAsset.bp)*selHave)}</div>
+                  <div style={{fontSize:10,color:"#ffffff44",marginBottom:6}}>ถือ {selHave} หน่วย = {fmt((prices[selAsset.id]||selAsset.bp)*selHave)}</div>
                 )}
-                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
-                  <button onClick={()=>setModal("buy")} style={{padding:"12px 0",borderRadius:10,border:"1px solid #4ade8055",background:"#4ade8012",color:"#4ade80",cursor:"pointer",fontSize:13,fontWeight:900,fontFamily:G.font}}>▲ ซื้อ</button>
-                  <button onClick={()=>selHave>0&&setModal("sell")} disabled={selHave===0} style={{padding:"12px 0",borderRadius:10,border:`1px solid ${selHave>0?"#f8717155":"#ffffff10"}`,background:selHave>0?"#f8717112":"#ffffff05",color:selHave>0?"#f87171":"#ffffff25",cursor:selHave>0?"pointer":"not-allowed",fontSize:13,fontWeight:900,fontFamily:G.font}}>▼ ขาย</button>
+                {short[selAsset?.id] && (
+                  <div style={{fontSize:10,marginBottom:8,padding:"5px 10px",borderRadius:7,background:"#f8717110",border:"1px solid #f8717125",color:"#f87171"}}>
+                    ⬇ Short {short[selAsset.id].qty} หน่วย · เปิดที่ {fmtP(selAsset,short[selAsset.id].openPrice)}
+                    &nbsp;·&nbsp;
+                    <span style={{color:(selAsset&&(short[selAsset.id].openPrice-(prices[selAsset.id]||selAsset.bp))*(short[selAsset.id].qty))>=0?"#4ade80":"#f87171"}}>
+                      P&L {(() => { const p=prices[selAsset.id]||selAsset.bp; const pnl=(short[selAsset.id].openPrice-p)*short[selAsset.id].qty; return (pnl>=0?"+":"")+fmt(pnl); })()}
+                    </span>
+                  </div>
+                )}
+                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:7}}>
+                  <button onClick={()=>setModal("buy")} style={{padding:"11px 0",borderRadius:10,border:"1px solid #4ade8055",background:"#4ade8012",color:"#4ade80",cursor:"pointer",fontSize:12,fontWeight:900,fontFamily:G.font}}>▲ ซื้อ</button>
+                  <button onClick={()=>selHave>0&&setModal("sell")} disabled={selHave===0} style={{padding:"11px 0",borderRadius:10,border:`1px solid ${selHave>0?"#f8717155":"#ffffff10"}`,background:selHave>0?"#f8717112":"#ffffff05",color:selHave>0?"#f87171":"#ffffff25",cursor:selHave>0?"pointer":"not-allowed",fontSize:12,fontWeight:900,fontFamily:G.font}}>▼ ขาย</button>
+                  {short[selAsset?.id] ? (
+                    <button onClick={()=>setModal("cover")} style={{padding:"11px 0",borderRadius:10,border:"1px solid #4ade8055",background:"#4ade8012",color:"#4ade80",cursor:"pointer",fontSize:12,fontWeight:900,fontFamily:G.font}}>↑ Cover</button>
+                  ) : (
+                    <button onClick={()=>setModal("short")} style={{padding:"11px 0",borderRadius:10,border:"1px solid #f8717155",background:"#f8717112",color:"#f87171",cursor:"pointer",fontSize:12,fontWeight:900,fontFamily:G.font}}>⬇ Short</button>
+                  )}
                 </div>
               </div>
             )}
@@ -2061,6 +2314,7 @@ const myRank = allP.findIndex(p=>p.isMe)+1;
                         <div style={{fontSize:12,fontWeight:700,color:a.color}}>{a.name}</div>
                         <div style={{fontSize:9,color:"#ffffff33"}}>
                           {a.id}{hv>0?` · ถือ ${hv}`:""}
+                          {short[a.id]&&<span style={{marginLeft:4,color:"#f87171",fontSize:8}}>⬇Short ×{short[a.id].qty}</span>}
                           {a.inc&&<span style={{marginLeft:4,color:a.type==="realestate"?"#fbbf24":a.type==="gold"?"#f59e0b":"#86efac",fontSize:8}}>+{fmt(a.inc)}/30s</span>}
                         </div>
                       </div>
@@ -2114,6 +2368,39 @@ const myRank = allP.findIndex(p=>p.isMe)+1;
                 })}
               </div>
             </div>
+            {Object.keys(short).length > 0 && (
+              <div style={{marginBottom:12}}>
+                <div style={{fontSize:9,letterSpacing:3,color:"#f8717155",marginBottom:8}}>⬇ SHORT POSITIONS</div>
+                {gameAssets.filter(a=>short[a.id]).map(a => {
+                  const p = prices[a.id]||a.bp;
+                  const pos = short[a.id];
+                  const pnl = (pos.openPrice - p) * pos.qty;
+                  const liqPrice = pos.openPrice * 1.5;
+                  return (
+                    <div key={a.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",
+                      padding:"12px 14px",borderRadius:11,marginBottom:6,
+                      background:"#f8717108",border:"1px solid #f8717125"}}>
+                      <div style={{display:"flex",alignItems:"center",gap:10}}>
+                        <span style={{fontSize:18}}>{a.emoji}</span>
+                        <div>
+                          <div style={{fontSize:12,fontWeight:700,color:"#f87171"}}>{a.name} <span style={{fontSize:10,color:"#ffffff33"}}>⬇Short</span></div>
+                          <div style={{fontSize:9,color:"#ffffff33"}}>{pos.qty} หน่วย · เปิดที่ {fmtP(a,pos.openPrice)}</div>
+                          <div style={{fontSize:8,color:"#f8717155"}}>Force Cover ที่ {fmtP(a,liqPrice)}</div>
+                        </div>
+                      </div>
+                      <div style={{textAlign:"right"}}>
+                        <div style={{fontSize:13,fontWeight:700,color:pnl>=0?"#4ade80":"#f87171"}}>{pnl>=0?"+":""}{fmt(pnl)}</div>
+                        <button onClick={()=>{setSelAsset(a);setTab("market");setModal("cover");}} style={{
+                          marginTop:4,padding:"4px 8px",borderRadius:6,fontSize:9,fontFamily:G.font,fontWeight:700,cursor:"pointer",
+                          border:"1px solid #4ade8033",background:"#4ade8010",color:"#4ade80",
+                        }}>↑ Cover</button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
             {gameAssets.filter(a=>(hold[a.id]||0)>0).length===0 ? (
               <div style={{textAlign:"center",padding:"40px 20px",color:"#ffffff22",fontSize:11}}>ยังไม่มีสินทรัพย์<br/>ไปซื้อที่แท็บตลาดได้เลย!</div>
             ) : (
@@ -2373,8 +2660,10 @@ const myRank = allP.findIndex(p=>p.isMe)+1;
 
       {/* MODALS */}
       {listModal && <ListItemModal item={listModal} onList={(p)=>listItem(listModal,p)} onClose={()=>setListModal(null)}/>}
-      {modal==="buy"  && selAsset && <BuyModal  asset={selAsset} price={selP} maxCash={cash} onBuy={doBuy} onClose={()=>setModal(null)} hist={selHist}/>}
-      {modal==="sell" && selAsset && <SellModal asset={selAsset} price={selP} maxQty={selHave} onSell={doSell} onClose={()=>setModal(null)} hist={selHist}/>}
+      {modal==="buy"   && selAsset && <BuyModal   asset={selAsset} price={selP} maxCash={cash} onBuy={doBuy} onClose={()=>setModal(null)} hist={selHist}/>}
+      {modal==="sell"  && selAsset && <SellModal  asset={selAsset} price={selP} maxQty={selHave} onSell={doSell} onClose={()=>setModal(null)} hist={selHist}/>}
+      {modal==="short" && selAsset && <ShortModal asset={selAsset} price={selP} maxCash={cash} onShort={doShort} onClose={()=>setModal(null)} hist={selHist}/>}
+      {modal==="cover" && selAsset && short[selAsset.id] && <CoverModal asset={selAsset} price={selP} shortPos={short[selAsset.id]} onCover={doCover} onClose={()=>setModal(null)} hist={selHist}/>}
       {modal==="lottery"  && <LotteryModal  onResult={handleGambleResult} onClose={()=>cancelGamble("lottery")}/>}
       {modal==="scratch"  && <ScratchModal  onResult={handleGambleResult} onClose={()=>cancelGamble("scratch")}/>}
       {modal==="crash"    && <CrashModal    onResult={handleGambleResult} onClose={()=>cancelGamble("crash")} maxBet={cash}/>}
