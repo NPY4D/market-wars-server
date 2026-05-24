@@ -638,6 +638,6 @@ const statusServer = http.createServer((req, res) => {
     res.end("Market Wars Server OK");
   }
 });
-statusServer.listen(PORT + 1, () => {
+statusServer.listen(parseInt(PORT) + 1, () => {
   console.log(`📊 Status endpoint: http://localhost:${PORT + 1}/status`);
 });
