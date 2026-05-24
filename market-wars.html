@@ -507,7 +507,7 @@ function WaitingRoom({ session, client, onGo, players, setPlayers }) {
             }}>
               <div style={{display:"flex",alignItems:"center",gap:8}}>
                 <span style={{fontSize:14}}>{p.isBot?"🤖":"👤"}</span>
-                <span style={{fontSize:12,color:p.isMe?"#38bdf8":p.isBot?"#64748b":"#fff"}}>{p.name}</span>
+                <span style={{fontSize:12,color:p.isMe?"#38bdf8":p.isBot?"#64748b":"#fff"}}>{p.nick||p.name}</span>
               </div>
               <span style={{fontSize:10,color:p.ready?"#4ade80":"#f87171"}}>
                 {p.ready?"✓ Ready":"Waiting"}
