@@ -449,8 +449,7 @@ function Lobby({ onStart }) {
 }
 
 // ── WAITING ROOM ──
-function WaitingRoom({ session, client, onGo }) {
-  const [players, setPlayers] = useState([{id:"me",name:session.nick,ready:false,isMe:true}]);
+function WaitingRoom({ session, client, onGo, players, setPlayers }) {
   const [copied,  setCopied]  = useState(false);
   const me = players.find(p => p.isMe);
 
@@ -2416,7 +2415,7 @@ const handleLobbyStart = (s) => {
     </>
   );
   if (screen==="waiting") return (
-    <WaitingRoom session={session} client={clientRef.current} onGo={ps=>{ setPlayers(ps); setScreen("game"); }}/>
+<WaitingRoom session={session} client={clientRef.current} players={players} setPlayers={setPlayers} onGo={ps=>{ setPlayers(ps); setScreen("game"); }}/>
   );
   if (screen==="game") return (
     <GameScreen session={session} initPlayers={players} client={clientRef.current} onEnd={r=>{ setResult(r); setScreen("result"); }}/>
