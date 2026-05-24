@@ -1346,7 +1346,9 @@ function GameScreen({ session, initPlayers, client, onEnd }) {
         case "CHAT":
           if(msg.msg){
             const m=msg.msg;
-            chatR.current=[...chatR.current.slice(-60),{id:m.id,player:m.nick,text:m.text,isMe:m.nick===session.nick,time:m.time}];
+            // ถ้าเป็นข้อความของตัวเอง ข้ามได้เลย (เราแสดงไปแล้วตอน sendChat)
+            if(m.nick===session.nick) break;
+            chatR.current=[...chatR.current.slice(-60),{id:m.id||`cs${chatSeqR.current++}`,player:m.nick,text:m.text,isMe:false,time:m.time||Date.now()}];
             setChatMsgs([...chatR.current]);
           }
           break;
@@ -1373,8 +1375,13 @@ function GameScreen({ session, initPlayers, client, onEnd }) {
   const syncBasis= () => setBasis({...basisR.current});
   const myNW = () => calcNW(cashR.current, holdR.current, priceR.current);
 
+  const chatSeqR = useRef(0);
   const addChatMsg = useCallback((player, text, isMe=false) => {
-    const msg = {id:`c${Date.now()}${Math.random().toString(36).slice(2,4)}`,player,text,isMe,time:Date.now()};
+    chatSeqR.current += 1;
+    const msg = {id:`c${chatSeqR.current}`,player,text,isMe,time:Date.now()};
+    // กัน duplicate: ถ้าข้อความเดิมจากคนเดิมเพิ่งถูกเพิ่มไปใน 500ms ก็ข้าม
+    const last = chatR.current[chatR.current.length-1];
+    if(last && last.player===player && last.text===text && Date.now()-last.time<500) return;
     chatR.current = [...chatR.current.slice(-60), msg];
     setChatMsgs([...chatR.current]);
   },[]);
@@ -1772,10 +1779,9 @@ function GameScreen({ session, initPlayers, client, onEnd }) {
   };
   const handleGambleResult = (res) => {
     if (onlineRef.current && client?.ok) {
-      // online: ส่งผล gamble ให้ server ประมวล
       const costs={lottery:100,scratch:50,crash:200,flip:300,roulette:150};
       client.gamble(modal, costs[modal]||100, res.choice||null);
-      // ผลจะมาทาง GAMBLE_RESULT message — ไม่ setModal ที่นี่
+      setModal(null); // ปิด modal เสมอ ไม่ว่า online หรือ offline
       return;
     }
     // offline
