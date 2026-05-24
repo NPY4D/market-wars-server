@@ -753,12 +753,13 @@ function LotteryModal({ onResult, onClose }) {
   const [phase, setPhase] = useState("ready");
   const [res,   setRes]   = useState(null);
   const [loseMsg] = useState(()=>LOSE_MSGS[Math.floor(Math.random()*LOSE_MSGS.length)]);
+  const firedRef = useRef(false);
+  const safeResult = (r) => { if(firedRef.current) return; firedRef.current=true; onResult(r); };
   const draw = () => {
     setPhase("drawing");
     setTimeout(() => {
       const r = Math.random();
       let result;
-      // Jackpot 0.5%, รางวัล2 2%, เล็ก 8% → แพ้ ~89.5%
       if (r < 0.005)       result = { win:true,  amount:50000, msg:"🎉 JACKPOT!! +฿50,000" };
       else if (r < 0.02)   result = { win:true,  amount:3000,  msg:"🎊 รางวัลที่ 2 +฿3,000" };
       else if (r < 0.105)  result = { win:true,  amount:150,   msg:"✨ รางวัลเล็ก +฿150" };
@@ -767,7 +768,7 @@ function LotteryModal({ onResult, onClose }) {
     }, 1200);
   };
   return (
-    <Modal onClose={()=>onResult({win:false,amount:0,msg:"ปิด"})} title="🎟️ ล็อตเตอรี่ (฿100)">
+    <Modal onClose={()=>safeResult({win:false,amount:0,msg:"ปิด"})} title="🎟️ ล็อตเตอรี่ (฿100)">
       <div style={{textAlign:"center"}}>
         {phase==="ready" && (
           <>
@@ -793,7 +794,7 @@ function LotteryModal({ onResult, onClose }) {
                 <div style={{fontSize:10,color:"#ffffff55",marginTop:4,lineHeight:1.6}}>{loseMsg}</div>
               </div>
             )}
-            <button onClick={()=>onResult(res)} style={{width:"100%",padding:13,borderRadius:10,
+            <button onClick={()=>safeResult(res)} style={{width:"100%",padding:13,borderRadius:10,
               border:"1px solid #ffffff20",background:"transparent",color:"#fff",
               cursor:"pointer",fontSize:13,fontFamily:G.font,fontWeight:700}}>ปิด</button>
           </>
@@ -810,23 +811,24 @@ const SCRATCH_LOSE_MSGS = [
 ];
 function ScratchModal({ onResult, onClose }) {
   const [revealed, setRevealed] = useState([false,false,false]);
-  // pool ใหม่: มีแต่ 0 เป็นส่วนใหญ่ → โอกาสได้เงินต่ำมาก
   const [prizes] = useState(() => {
     const pool = [0,0,0,0,0,50,50,100,150,200];
     return Array.from({length:3},()=>pool[Math.floor(Math.random()*pool.length)]);
   });
   const [loseMsg] = useState(()=>SCRATCH_LOSE_MSGS[Math.floor(Math.random()*SCRATCH_LOSE_MSGS.length)]);
+  const firedRef = useRef(false);
+  const safeResult = (r) => { if(firedRef.current) return; firedRef.current=true; onResult(r); };
   const allDone = revealed.every(Boolean);
   const reveal = (i) => {
     const n = [...revealed]; n[i]=true; setRevealed(n);
     if(n.every(Boolean)){
       const total = prizes.reduce((s,v)=>s+v,0);
-      setTimeout(()=>onResult({win:total>0,amount:total,msg:total>0?`✨ ขูด +฿${total}`:"😭 ไม่ถูก"}),600);
+      setTimeout(()=>safeResult({win:total>0,amount:total,msg:total>0?`✨ ขูด +฿${total}`:"😭 ไม่ถูก"}),600);
     }
   };
   const total = prizes.reduce((s,v)=>s+v,0);
   return (
-    <Modal onClose={()=>onResult({win:false,amount:0,msg:"ปิด"})} title="🃏 Scratch Card (฿50)">
+    <Modal onClose={()=>safeResult({win:false,amount:0,msg:"ปิด"})} title="🃏 Scratch Card (฿50)">
       <div style={{textAlign:"center",padding:"10px 0 20px"}}>
         <div style={{fontSize:10,color:"#ffffff33",marginBottom:4}}>แตะเพื่อขูด 3 ช่อง</div>
         <div style={{display:"flex",gap:10,justifyContent:"center",marginBottom:16}}>
@@ -856,16 +858,17 @@ function CrashModal({ onResult, onClose, maxBet }) {
   const [phase, setPhase] = useState("bet");
   const [mult,  setMult]  = useState(1.00);
   const multR = useRef(1.00);
-  // crash point: 70% โอกาสครั้งก่อน 1.5x, 20% ก่อน 3x, 10% ไกลกว่า
   const crashRef = useRef(null);
   if (crashRef.current === null) {
     const r = Math.random();
-    if (r < 0.25)      crashRef.current = (1.01 + Math.random()*0.39).toFixed(2); // 25%: crash 1.01-1.4
-    else if (r < 0.55) crashRef.current = (1.4  + Math.random()*0.80).toFixed(2); // 30%: crash 1.4-2.2
-    else if (r < 0.80) crashRef.current = (2.2  + Math.random()*2.30).toFixed(2); // 25%: crash 2.2-4.5
-    else               crashRef.current = (4.5  + Math.random()*7.0 ).toFixed(2); // 20%: crash 4.5-11.5
+    if (r < 0.25)      crashRef.current = (1.01 + Math.random()*0.39).toFixed(2);
+    else if (r < 0.55) crashRef.current = (1.4  + Math.random()*0.80).toFixed(2);
+    else if (r < 0.80) crashRef.current = (2.2  + Math.random()*2.30).toFixed(2);
+    else               crashRef.current = (4.5  + Math.random()*7.0 ).toFixed(2);
   }
   const intervalR = useRef(null);
+  const firedRef  = useRef(false);
+  const safeResult = (r) => { if(firedRef.current) return; firedRef.current=true; clearInterval(intervalR.current); onResult(r); };
 
   const start = () => {
     setPhase("live");
@@ -879,15 +882,14 @@ function CrashModal({ onResult, onClose, maxBet }) {
     },100);
   };
   const cashOut = () => {
-    clearInterval(intervalR.current);
     const profit = Math.round(bet*multR.current-bet);
-    onResult({win:true,amount:profit,msg:`💰 Cash Out ×${multR.current.toFixed(2)} +฿${profit}`});
+    safeResult({win:true,amount:profit,msg:`💰 Cash Out ×${multR.current.toFixed(2)} +฿${profit}`});
   };
   useEffect(()=>()=>clearInterval(intervalR.current),[]);
   const c = phase==="crashed"?"#f87171":mult<2?"#fbbf24":mult<5?"#4ade80":"#38bdf8";
 
   return (
-    <Modal onClose={()=>{clearInterval(intervalR.current);onResult({win:false,amount:0,msg:"ปิด"})}} title="🚀 Crash Game (฿200)">
+    <Modal onClose={()=>safeResult({win:false,amount:0,msg:"ปิด"})} title="🚀 Crash Game (฿200)">
       {phase==="bet" && (
         <div style={{textAlign:"center"}}>
           <div style={{fontSize:10,color:"#ffffff33",marginBottom:8}}>จับไว้! Cash Out ก่อน Crash!</div>
@@ -927,7 +929,7 @@ function CrashModal({ onResult, onClose, maxBet }) {
               cursor:"pointer",fontSize:16,fontWeight:900,fontFamily:G.font,
               boxShadow:"0 4px 20px #14532d66"}}>💰 CASH OUT ×{mult.toFixed(2)}</button>
           ) : (
-            <button onClick={()=>onResult({win:false,amount:0,msg:`💥 Crash ที่ ${crashRef.current}× เสีย ฿${bet}`})} style={{
+            <button onClick={()=>safeResult({win:false,amount:0,msg:`💥 Crash ที่ ${crashRef.current}× เสีย ฿${bet}`})} style={{
               width:"100%",padding:13,borderRadius:10,border:"1px solid #f8717140",
               background:"#f8717110",color:"#f87171",cursor:"pointer",fontSize:13,fontFamily:G.font,fontWeight:700}}>ปิด</button>
           )}
@@ -948,22 +950,21 @@ function FlipModal({ onResult, onClose }) {
   const [phase, setPhase] = useState("bet");
   const [face,  setFace]  = useState(null);
   const [loseMsg] = useState(()=>FLIP_LOSE_MSGS[Math.floor(Math.random()*FLIP_LOSE_MSGS.length)]);
+  const firedRef = useRef(false);
+  const safeResult = (r) => { if(firedRef.current) return; firedRef.current=true; onResult(r); };
   const flip = () => {
     setPhase("flipping");
     setTimeout(()=>{
-      // บ้านได้เปรียบ 55/45
-      const r = Math.random();
-      const r2 = Math.random();
-      const houseWins = r < 0.55;
+      const houseWins = Math.random() < 0.55;
       const result = houseWins ? (pick==="heads"?"tails":"heads") : pick;
       setFace(result); setPhase("done");
       const win = result===pick;
-      setTimeout(()=>onResult({win,amount:win?bet:0,
+      setTimeout(()=>safeResult({win,amount:win?bet:0,
         msg:win?`✅ ${result==="heads"?"หัว 🪙":"ก้อย 🟡"} ถูก! +฿${bet}`:`❌ ${result==="heads"?"หัว 🪙":"ก้อย 🟡"} เสีย ฿${bet}`}),900);
     }, 900);
   };
   return (
-    <Modal onClose={()=>onResult({win:false,amount:0,msg:"ปิด"})} title="🪙 เหรียญทาย">
+    <Modal onClose={()=>safeResult({win:false,amount:0,msg:"ปิด"})} title="🪙 เหรียญทาย">
       {phase==="bet" && (
         <div style={{textAlign:"center"}}>
           <div style={{color:"#ffffff33",fontSize:10,marginBottom:4}}>ถูก = ×2 · ผิด = เสียหมด</div>
@@ -1010,28 +1011,28 @@ function RouletteModal({ onResult, onClose }) {
   const [numPick,setNumPick]= useState(null);
   const [phase,  setPhase]  = useState("bet");
   const [ball,   setBall]   = useState(null);
+  const firedRef = useRef(false);
+  const safeResult = (r) => { if(firedRef.current) return; firedRef.current=true; onResult(r); };
   const spin = () => {
     setPhase("spin");
     setTimeout(()=>{
-      // Double-zero roulette: 0–38 (38 = "00") → house edge ~5.26%
-      const n = Math.floor(Math.random()*39); // 0-36 + "00"=37
+      const n = Math.floor(Math.random()*39);
       const displayN = n === 37 ? "00" : n;
       setBall(displayN); setPhase("result");
       const isRed=REDS.includes(n), isBlack=n!==0&&n!==37&&!isRed;
       let win=false,amount=0,msg="";
       if(numPick!==null){
-        win = n===numPick;
-        amount=bet*35;
+        win = n===numPick; amount=bet*35;
         msg=win?`🎯 เลข ${displayN}! ×35 = +฿${(bet*35).toLocaleString()}!!`:`❌ ออก ${displayN}`;
       }
       else if(choice==="red"){win=isRed;amount=bet;msg=win?`🔴 แดง! +฿${bet}`:`ออก ${displayN} (ไม่ใช่แดง)`;}
       else if(choice==="black"){win=isBlack;amount=bet;msg=win?`⚫ ดำ! +฿${bet}`:`ออก ${displayN} (ไม่ใช่ดำ)`;}
       else if(choice==="zero"){win=n===0||n===37;amount=bet*17;msg=win?`0️⃣ ZERO!! +฿${bet*17}`:`❌ ออก ${displayN}`;}
-      setTimeout(()=>onResult({win,amount:win?amount:0,msg}),1000);
+      setTimeout(()=>safeResult({win,amount:win?amount:0,msg}),1000);
     },1500);
   };
   return (
-    <Modal onClose={()=>onResult({win:false,amount:0,msg:"ปิด"})} title="🎰 รูเล็ต">
+    <Modal onClose={()=>safeResult({win:false,amount:0,msg:"ปิด"})} title="🎰 รูเล็ต">
       {phase==="bet" && (
         <div>
           <div style={{fontSize:10,color:"#ffffff33",marginBottom:4}}>แดง/ดำ = ×2 · เลข = ×35</div>
