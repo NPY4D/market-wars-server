@@ -2374,10 +2374,7 @@ if (msg.type === "PLAYER_JOINED") {
 if (msg.type === "PLAYER_READY") {
   setPlayers(p => p.map(x => x.id===msg.playerId ? {...x, ready:msg.ready} : x));
 }
-if (msg.type === "JOINED") {
-  // sync players list จาก server ทันที
-  setPlayers(msg.players.map(p=>({...p, isMe:p.id===msg.playerId})));
-}
+
       if (msg.type === "GAME_START") {
         setScreen("game");
       }
