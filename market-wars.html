@@ -1291,6 +1291,15 @@ function GameScreen({ session, initPlayers, client, onEnd }) {
           if(msg.ok){
             cashR.current=msg.cash; holdR.current={...msg.hold};
             setCash(msg.cash); setHold({...msg.hold});
+            // อัพเดท basis เพื่อคำนวณกำไร/ขาดทุนให้ถูกต้อง
+            if(msg.action==="buy" && msg.assetId && msg.cost){
+              basisR.current[msg.assetId]=(basisR.current[msg.assetId]||0)+msg.cost;
+            } else if(msg.action==="sell" && msg.assetId && msg.qty){
+              const totalHeld=(holdR.current[msg.assetId]||0)+msg.qty;
+              const avgCost=(basisR.current[msg.assetId]||0)/Math.max(totalHeld,1)*msg.qty;
+              basisR.current[msg.assetId]=Math.max(0,(basisR.current[msg.assetId]||0)-avgCost);
+            }
+            syncBasis();
             showNotif(msg.action==="buy"
               ? `▲ ซื้อ ×${msg.qty} −${fmt(msg.cost)}`
               : `▼ ขาย ×${msg.qty} +${fmt(msg.gain)}`,
@@ -2137,7 +2146,7 @@ const myRank = allP.findIndex(p=>p.isMe)+1;
                   </div>
                 </div>
                 <div style={{textAlign:"right"}}>
-                  <div style={{fontSize:13,fontWeight:700,color:p.nw>=cfg.start?"#4ade80":"#f87171"}}>{fmt(p.nw)}</div>
+                  <div style={{fontSize:13,fontWeight:700,color:p.nw>=cfg.start?"#4ade80":"#f87171"}}>{p.nw>=cfg.start?"+":""}{fmt(p.nw-cfg.start)}</div>
                   <div style={{fontSize:9,color:p.nw>=cfg.start?"#4ade8055":"#f8717155"}}>
                     {p.nw>=cfg.start?"+":""}{((p.nw-cfg.start)/cfg.start*100).toFixed(1)}%
                   </div>
