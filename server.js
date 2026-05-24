@@ -405,7 +405,11 @@ function handleJoin(ws, data) {
   clients.set(ws, { playerId, roomCode, nick });
 
   // แจ้งคนในห้องว่ามีคนเข้าใหม่
-  broadcast(room, "PLAYER_JOINED", { playerId, nick, isHost: false }, playerId);
+broadcastAll(room, "PLAYERS_UPDATE", {
+  players: [...room.players.values()].map(p => ({
+    id: p.id, nick: p.nick, isHost: p.isHost, ready: p.ready,
+  })),
+});
 
   // ส่งข้อมูลห้องให้คนที่เพิ่งเข้า
   send(ws, "JOINED", {
@@ -433,7 +437,11 @@ function handleReady(ws, data) {
   if (!player) return;
 
   player.ready = !player.ready;
-  broadcastAll(room, "PLAYER_READY", { playerId: info.playerId, ready: player.ready });
+broadcastAll(room, "PLAYERS_UPDATE", {
+  players: [...room.players.values()].map(p => ({
+    id: p.id, nick: p.nick, isHost: p.isHost, ready: p.ready,
+  })),
+});
 
   // Auto-start: host กด start หรือทุกคน ready
   const allReady = [...room.players.values()].every(p => p.ready);
