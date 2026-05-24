@@ -1661,20 +1661,25 @@ function GameScreen({ session, initPlayers, client, onEnd }) {
         showNotif(hev.msg,"#c084fc");
       }
 
-      // Bot marketplace: buy player listings & list own items (every 10 ticks)
+      // NPC marketplace buyers (every 10 ticks) — เงินมาจากระบบ ไม่หักจากผู้เล่นหรือ bot คนไหน
       if(tickR.current % 10 === 0){
+        const NPC_NAMES = ["คนแปลกหน้า🧑","นักสะสม🎒","แฟนอนิเม🌸","เซียนของหายาก🔍",
+          "เด็กรวย💳","นักลงทุน🕵️","ลูกค้าออนไลน์📱","คนซื้อสด💵","ไม่รู้จัก🫥","ขาจร🚶"];
         const playerListings=mktplaceR.current.filter(l=>l.sellerIsMe);
         playerListings.forEach(listing=>{
-          const fairV=listing.item.bp*(hypeIdxR.current[listing.item.type]||1);
-          if(Math.random()<0.10 && listing.price<=fairV*0.92 && botsR.current.length>0){
-            const buyer=botsR.current[Math.floor(Math.random()*botsR.current.length)];
-            cashR.current+=listing.price; syncCash();
+          // ยิ่งแพงยิ่งซื้อยาก: โอกาสลดแบบ exponential ตามราคา
+          // ฿100→~22%  ฿500→~17%  ฿2K→~10%  ฿10K→~3%  ฿50K→~0.3%
+          const buyChance = 0.25 * Math.exp(-listing.price / 8000);
+          if(Math.random() < buyChance){
+            const npcName = NPC_NAMES[Math.floor(Math.random()*NPC_NAMES.length)];
+            // เงินจากระบบ — ไม่ดึงจาก bot หรือ player คนไหน
+            cashR.current += listing.price; syncCash();
             mktplaceR.current=mktplaceR.current.filter(l=>l.id!==listing.id);
             setMktplace([...mktplaceR.current]);
             hypeInvR.current=hypeInvR.current.filter(i=>i.id!==listing.itemId);
             setHypeInv([...hypeInvR.current]);
-            showNotif(`🤝 ${buyer.name} ซื้อ ${listing.item.name} +฿${listing.price.toLocaleString()}`,"#4ade80");
-            addChatMsg(buyer.name,`ได้ ${listing.item.emoji}${listing.item.name} มาแล้ว!`);
+            showNotif(`🛒 ${npcName} ซื้อ ${listing.item.name} +฿${listing.price.toLocaleString()}`,"#4ade80");
+            addChatMsg(npcName, `ได้ ${listing.item.emoji}${listing.item.name} มาแล้ว ขอบคุณ!`);
           }
         });
         // Bots add own listings
@@ -1757,8 +1762,7 @@ function GameScreen({ session, initPlayers, client, onEnd }) {
       // online: ส่งผล gamble ให้ server ประมวล
       const costs={lottery:100,scratch:50,crash:200,flip:300,roulette:150};
       client.gamble(modal, costs[modal]||100, res.choice||null);
-      // ปิด modal เสมอ ไม่ว่าจะ online หรือ offline
-      setModal(null);
+      // ผลจะมาทาง GAMBLE_RESULT message — ไม่ setModal ที่นี่
       return;
     }
     // offline
@@ -1858,8 +1862,8 @@ const myRank = allP.findIndex(p=>p.isMe)+1;
       <div style={{position:"sticky",top:0,zIndex:200,background:`${G.bg}f0`,backdropFilter:"blur(16px)",borderBottom:`1px solid ${G.border}`}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"9px 14px"}}>
           <div style={{minWidth:95}}>
-           <div style={{fontSize:8,letterSpacing:3,color:"#ffffff25"}}>NET WORTH</div>
-            <AnimNum value={displayNW} color={displayNW>=cfg.start?"#4ade80":"#f87171"} size={19}/>
+           <div style={{fontSize:8,letterSpacing:3,color:"#ffffff25"}}>PROFIT / LOSS</div>
+            <AnimNum value={displayNW - cfg.start} color={displayNW>=cfg.start?"#4ade80":"#f87171"} size={19}/>
             <div style={{fontSize:8,marginTop:1,color:displayNW>=cfg.start?"#4ade8055":"#f8717155"}}>
               {displayNW>=cfg.start?"+":""}{((displayNW-cfg.start)/cfg.start*100).toFixed(1)}%
             </div>
