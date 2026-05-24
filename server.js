@@ -626,7 +626,6 @@ setInterval(() => {
 
 // ─── STATUS ENDPOINT ─────────────────────────────────
 // ดู status ผ่าน HTTP GET (ต้องใช้ http module แยก)
-const http = require("http");
 const statusServer = http.createServer((req, res) => {
   if (req.url === "/status") {
     const data = {
