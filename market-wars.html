@@ -1773,11 +1773,11 @@ function GameScreen({ session, initPlayers, client, onEnd }) {
     setCards(p=>p.filter((_,i)=>i!==idx));
   };
 
-  const allP = (onlineRef.current && board.length > 0)
-    ? board.map(p=>({...p,isMe:p.nick===session.nick})).sort((a,b)=>b.nw-a.nw)
-    : [{id:"me",name:session.nick,nw:displayNW,isMe:true},
-       ...botsR.current.map(b=>({id:b.id,name:b.name,nw:b.nw}))
-      ].sort((a,b)=>b.nw-a.nw);
+ const allP = (onlineRef.current && board.length > 0)
+  board.map(p=>({...p, nw:p.nw||0, isMe:p.nick===session.nick}))
+  : [{id:"me", name:session.nick, nw:displayNW, isMe:true},
+     ...botsR.current.map(b=>({id:b.id, name:b.name, nw:b.nw}))
+    ].sort((a,b)=>b.nw-a.nw);
   const myRank = allP.findIndex(p=>p.isMe)+1;
 
   const mins=Math.floor(timeLeft/60), secs=timeLeft%60;
@@ -2364,12 +2364,20 @@ function App() {
         setPlayers(msg.players.map(p=>({...p,isMe:p.id===msg.playerId})));
         setScreen("waiting");
       }
-      if (msg.type === "PLAYER_JOINED") {
-        setPlayers(p => [...p, {id:msg.playerId,nick:msg.nick,ready:false,isMe:false}]);
-      }
-      if (msg.type === "PLAYER_READY") {
-        setPlayers(p => p.map(x => x.id===msg.playerId ? {...x,ready:msg.ready} : x));
-      }
+if (msg.type === "PLAYER_JOINED") {
+  setPlayers(p => {
+    const exists = p.find(x => x.id===msg.playerId);
+    if (exists) return p;
+    return [...p, {id:msg.playerId, nick:msg.nick, ready:false, isMe:false}];
+  });
+}
+if (msg.type === "PLAYER_READY") {
+  setPlayers(p => p.map(x => x.id===msg.playerId ? {...x, ready:msg.ready} : x));
+}
+if (msg.type === "JOINED") {
+  // sync players list จาก server ทันที
+  setPlayers(msg.players.map(p=>({...p, isMe:p.id===msg.playerId})));
+}
       if (msg.type === "GAME_START") {
         setScreen("game");
       }
