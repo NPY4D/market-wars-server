@@ -1773,12 +1773,12 @@ function GameScreen({ session, initPlayers, client, onEnd }) {
     setCards(p=>p.filter((_,i)=>i!==idx));
   };
 
- const allP = (onlineRef.current && board.length > 0)
-  board.map(p=>({...p, nw:p.nw||0, isMe:p.nick===session.nick}))
+const allP = (onlineRef.current && board.length > 0)
+  ? board.map(p=>({...p, nw:p.nw||0, isMe:p.nick===session.nick})).sort((a,b)=>b.nw-a.nw)
   : [{id:"me", name:session.nick, nw:displayNW, isMe:true},
      ...botsR.current.map(b=>({id:b.id, name:b.name, nw:b.nw}))
     ].sort((a,b)=>b.nw-a.nw);
-  const myRank = allP.findIndex(p=>p.isMe)+1;
+const myRank = allP.findIndex(p=>p.isMe)+1;
 
   const mins=Math.floor(timeLeft/60), secs=timeLeft%60;
   const tPct=(timeLeft/(session.duration||cfg.dur))*100;
