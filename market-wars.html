@@ -1573,6 +1573,35 @@ function GameScreen({ session, initPlayers, client, onEnd }) {
 
       botTick();
 
+      // ═══ JOKE EVENTS ทุก 15s โอกาส 50% ═══
+      if (tickR.current % 45 === 0 && Math.random() < 0.5) {
+        const jokeEvts = [
+          // 📰 ข่าวโอกาสน้อยแต่ไม่ใช่ศูนย์
+          { msg:"รัฐบาลไทยจะรับ BTC เป็นเงินตราอย่างเป็นทางการ", color:"#fb923c" },
+          { msg:"Apple เตรียมออก AppleCoin รองรับ iPhone ทุกเครื่อง", color:"#38bdf8" },
+          { msg:"Fed ลดดอกเบี้ยฉุกเฉิน 3 ครั้งใน 1 เดือน", color:"#fbbf24" },
+          { msg:"Nvidia เตรียมซื้อ AMD ผูกขาดชิป AI ทั่วโลก", color:"#a3e635" },
+          { msg:"ทองคำจะแตะ 50,000 บาท/บาท ภายในปีนี้", color:"#f59e0b" },
+          { msg:"Tesla รับ DOGE เป็นค่ารถอย่างเป็นทางการอีกครั้ง", color:"#4ade80" },
+          { msg:"IMF เตรียมแบน Crypto ทั่วโลกภายในปีหน้า", color:"#f87171" },
+          { msg:"น้ำมันพุ่ง 200 USD/บาร์เรล หากตะวันออกกลางบานปลาย", color:"#78716c" },
+          { msg:"ธนาคารกรุงเทพเตรียมรับฝาก BTC อย่างเป็นทางการ", color:"#fb923c" },
+          { msg:"Elon Musk ซื้อหุ้น PTT ลงทุนพลังงานไทย", color:"#ea580c" },
+          { msg:"กระทรวงการคลังเก็บภาษี Crypto 35% ย้อนหลัง", color:"#f87171" },
+          { msg:"SOL จะแซง ETH ใน market cap ภายใน 6 เดือน", color:"#c084fc" },
+          { msg:"BTC ทะลุ 5 ล้านบาทภายในสิ้นปี", color:"#fb923c" },
+          { msg:"ตลาดหุ้นไทย SET ทะลุ 2,000 จุดภายในปีนี้", color:"#38bdf8" },
+          { msg:"ข้าวไทยขาดแคลนรุนแรง ราคาพุ่ง 3 เท่าใน 2 เดือน", color:"#86efac" },
+          { msg:"Apple เตรียมออก Stablecoin ผูกกับ USD", color:"#38bdf8" },
+          { msg:"DOGE ถูกบรรจุใน S&P 500 หลัง market cap แซงบริษัทใหญ่", color:"#eab308" },
+          { msg:"อาเซียนจับมือสร้าง ASEAN Crypto Reserve", color:"#818cf8" },
+          { msg:"สงครามการค้าสหรัฐ-จีนรอบใหม่กระทบส่งออกไทยหนัก", color:"#f87171" },
+          { msg:"ราคาคอนโดกรุงเทพลดฮวบ 40% หลังฟองสบู่อสังหาแตก", color:"#f87171" },
+        ];
+        const jk = jokeEvts[Math.floor(Math.random()*jokeEvts.length)];
+        showNotif(jk.msg, jk.color);
+      }
+
       // Mini-events every 20s — กระทบ 1 asset เพิ่มความตื่นเต้นระหว่าง main events
       if (tickR.current % 20 === 0 && !evR.current) {
         const miniEvts=[
