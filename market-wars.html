@@ -2383,16 +2383,15 @@ function App() {
     return () => client.disconnect();
   }, []);
 
-  const handleLobbyStart = (s) => {
-    if (ONLINE_MODE && clientRef.current?.ok) {
-      setSession(s);
-      clientRef.current.join(s.nick, s.code, s.mode, s.endMode, s.target, s.duration);
-      // ไม่ setScreen ทันที — รอ JOINED จาก server
-    } else {
-      // offline mode
-      setSession(s); setScreen("waiting");
-    }
-  };
+const handleLobbyStart = (s) => {
+  if (ONLINE_MODE && clientRef.current?.ok) {
+    setSession(s);
+    clientRef.current.join(s.nick, s.code, s.mode, s.endMode, s.target, s.duration);
+    setScreen("waiting");
+  } else {
+    setSession(s); setScreen("waiting");
+  }
+};
 
   if (screen==="lobby") return (
     <>
