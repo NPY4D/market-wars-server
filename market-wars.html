@@ -562,6 +562,8 @@ function Lobby({ onStart }) {
 // ── WAITING ROOM ──
 function WaitingRoom({ session, client, onGo, players, setPlayers }) {
   const [copied,  setCopied]  = useState(false);
+  // lock offline/online mode at mount — prevents server reconnect mid-session from switching modes
+  const [isOffline] = useState(() => !client?.ok);
   const me = players.find(p => p.isMe);
 
   const addBot = () => {
@@ -572,16 +574,15 @@ function WaitingRoom({ session, client, onGo, players, setPlayers }) {
     });
   };
   const toggleReady = () => {
-    if (client?.ok) {
+    if (!isOffline && client?.ok) {
       client.ready();
     } else {
       setPlayers(p=>p.map(x=>x.isMe?{...x,ready:!x.ready}:x));
     }
   };
-  const isOffline = !client?.ok;
   const canStart = isOffline ? players.length >= 2 : (players.length >= 2 && me?.ready);
   const doStart = () => {
-    if (client?.ok) {
+    if (!isOffline && client?.ok) {
       client.start();
     } else {
       onGo(players);
@@ -638,7 +639,7 @@ function WaitingRoom({ session, client, onGo, players, setPlayers }) {
           </PillBtn>
         </div>
         <PillBtn onClick={doStart} color="#38bdf8" disabled={!canStart} full size="lg">
-          {client?.ok ? "🚀 START GAME (Online)" : "🚀 START GAME (Offline)"}
+          {!isOffline ? "🚀 START GAME (Online)" : "🚀 START GAME (Offline)"}
         </PillBtn>
       </div>
     </div>
@@ -3022,9 +3023,11 @@ if (msg.type === "PLAYER_JOINED") {
   });
 }
 if (msg.type === "PLAYERS_UPDATE") {
-  setPlayers(msg.players.map(p => ({
-    ...p, isMe: p.id === playerIdRef.current,
-  })));
+  setPlayers(prev => {
+    const localBots = prev.filter(p => p.isBot);
+    const serverPlayers = msg.players.map(p => ({...p, isMe: p.id === playerIdRef.current}));
+    return [...serverPlayers, ...localBots];
+  });
 }
       if (msg.type === "GAME_START") {
         setScreen("game");
