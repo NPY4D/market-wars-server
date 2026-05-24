@@ -2370,10 +2370,11 @@ if (msg.type === "PLAYER_JOINED") {
     return [...p, {id:msg.playerId, nick:msg.nick, ready:false, isMe:false}];
   });
 }
-if (msg.type === "PLAYER_READY") {
-  setPlayers(p => p.map(x => x.id===msg.playerId ? {...x, ready:msg.ready} : x));
+if (msg.type === "PLAYERS_UPDATE") {
+  setPlayers(msg.players.map(p => ({
+    ...p, isMe: p.nick===session?.nick,
+  })));
 }
-
       if (msg.type === "GAME_START") {
         setScreen("game");
       }
