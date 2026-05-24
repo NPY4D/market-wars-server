@@ -9,7 +9,15 @@ const WebSocket = require("ws");
 const { randomUUID } = require("crypto");
 
 const PORT = process.env.PORT || 3001;
-const wss = new WebSocket.Server({ port: PORT });
+const http = require("http");
+const server = http.createServer((req, res) => {
+  res.writeHead(200, { "Content-Type": "text/plain" });
+  res.end("Market Wars Server OK");
+});
+const wss = new WebSocket.Server({ server });
+server.listen(PORT, () => {
+  console.log(`🚀 Market Wars Server running on port ${PORT}`);
+});
 
 console.log(`🚀 Market Wars Server running on ws://localhost:${PORT}`);
 
