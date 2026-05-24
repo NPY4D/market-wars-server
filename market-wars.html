@@ -1189,7 +1189,7 @@ function ResultScreen({ result, onRestart }) {
                 <span style={{fontSize:13,minWidth:20,color:i===0?"#ffd700":i===1?"#e2e8f0":i===2?"#cd7f32":"#ffffff33"}}>
                   {i===0?"🥇":i===1?"🥈":i===2?"🥉":`#${i+1}`}
                 </span>
-                <span style={{fontSize:11,color:p.isMe?"#38bdf8":"#ffffff66"}}>{p.name}</span>
+                <span style={{fontSize:11,color:p.isMe?"#38bdf8":"#ffffff66"}}>{p.nick||p.name}</span>
               </div>
               <span style={{fontSize:11,fontWeight:700,color:p.nw>=start?"#4ade80":"#f87171"}}>{fmt(p.nw)}</span>
             </div>
@@ -1274,6 +1274,12 @@ function GameScreen({ session, initPlayers, client, onEnd }) {
       switch(msg.type) {
         case "TICK":
           if(msg.prices){ priceR.current={...msg.prices}; setPrices({...msg.prices}); }
+        if(msg.prices){
+    Object.entries(msg.prices).forEach(([id,p])=>{
+      if(!histR.current[id]) histR.current[id]=[];
+      histR.current[id]=[...histR.current[id],p].slice(-60);
+    });
+  }
           if(msg.timeLeft!==undefined) setTimeLeft(msg.timeLeft);
           if(msg.phase) setPhase(msg.phase);
           if(msg.activeEvent!==undefined) setActiveEv(msg.activeEvent);
