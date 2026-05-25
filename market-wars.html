@@ -1590,7 +1590,13 @@ function BlackjackModal({ onResult, onClose, onDoubleBet, bet=300, maxCash=Infin
 const HORSE_NAMES = ["Thunder","Lucky","Blaze","Storm","Flash"];
 const HORSE_EMOJIS = ["🐴","🐎","🦄","🐎","🐴"];
 const HORSE_COLORS = ["#fbbf24","#4ade80","#c084fc","#38bdf8","#f87171"];
-function HorseRaceWatchModal({ race, pickedHorse, onPickHorse, onBet, cash, onClose }) {
+function HorseRaceWatchModal({ raceR, pickedHorse, onPickHorse, onBet, cash, onClose }) {
+  const [, tick] = useState(0);
+  useEffect(() => {
+    const id = setInterval(() => tick(n => n+1), 500);
+    return () => clearInterval(id);
+  }, []);
+  const race = raceR.current;
   const pos = race.positions || [0,0,0,0,0];
   const leadIdx = race.phase==='racing' ? pos.indexOf(Math.max(...pos)) : -1;
   const pb = race.playerBet;
@@ -3912,107 +3918,6 @@ const myRank = allP.findIndex(p=>p.isMe)+1;
         </div>
       )}
 
-      {/* ── HORSE RACE BANNER ── */}
-      {race && race.phase && (
-        <div style={{margin:"5px 14px",padding:"10px 14px",borderRadius:11,
-          background:"linear-gradient(135deg,#78350f12,#fbbf2408)",border:"1px solid #fbbf2830",
-          animation:"event-banner-in 0.4s cubic-bezier(0.34,1.56,0.64,1)"}}>
-          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
-            <div>
-              <div style={{fontSize:8,letterSpacing:3,color:"#fbbf2466",marginBottom:1}}>🏇 HORSE RACE</div>
-              <div style={{color:race.phase==='break'?"#ffffff44":"#fbbf24",fontWeight:700,fontSize:12}}>
-                {race.phase==='break'?`พักระหว่างรอบ — อีก ${race.breakTick}s`:
-                 race.phase==='betting'?`🎯 รับเดิมพัน อีก ${race.betTick}s`:
-                 race.phase==='racing'?'🏁 กำลังแข่ง!':
-                 race.winner>=0?`🏆 ${HORSE_EMOJIS[race.winner]} ${HORSE_NAMES[race.winner]} ชนะ!`:''}
-              </div>
-            </div>
-            <div style={{textAlign:"right"}}>
-              {race.playerBet && (
-                <div style={{fontSize:9,color:race.won?"#4ade80":"#ffffff88"}}>
-                  {HORSE_EMOJIS[race.playerBet.horse]} ฿{race.playerBet.amount.toLocaleString()}
-                </div>
-              )}
-              {race.phase==='result'&&<div style={{fontSize:20}}>{race.won?"🏆":"💔"}</div>}
-            </div>
-          </div>
-          {/* Horse tracks (racing + result) */}
-          {(race.phase==='racing'||race.phase==='result') && (
-            <div style={{marginBottom:6}}>
-              {HORSE_NAMES.map((name,i)=>{
-                const isBet = race.playerBet?.horse===i;
-                const isWin = race.winner===i;
-                return (
-                  <div key={i} style={{marginBottom:4}}>
-                    <div style={{display:"flex",justifyContent:"space-between",fontSize:8,marginBottom:2}}>
-                      <span style={{color:isBet?HORSE_COLORS[i]:"#ffffff44",fontWeight:isBet?700:400}}>
-                        {HORSE_EMOJIS[i]} {name}{isBet?" ★":""}{isWin?" 🏆":""}
-                      </span>
-                      <span style={{color:"#ffffff22"}}>{Math.round(race.positions[i])}m</span>
-                    </div>
-                    <div style={{height:16,background:"#ffffff06",borderRadius:5,overflow:"visible",position:"relative",border:"1px solid #ffffff06"}}>
-                      <div style={{position:"absolute",left:0,top:0,bottom:0,
-                        width:`${race.positions[i]}%`,
-                        background:isBet?`${HORSE_COLORS[i]}25`:"#ffffff08",
-                        borderRadius:4,transition:"width .95s linear"}}/>
-                      <div style={{position:"absolute",
-                        left:`${Math.max(0,Math.min(race.positions[i],93))}%`,
-                        top:"50%",transform:"translateY(-50%)",fontSize:12,lineHeight:1,transition:"left .95s linear",
-                        filter:isWin?"drop-shadow(0 0 4px gold)":undefined}}>
-                        {HORSE_EMOJIS[i]}
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-          {/* Betting UI */}
-          {race.phase==='betting' && !race.playerBet && (
-            <div>
-              <div style={{fontSize:9,color:"#ffffff44",marginBottom:5}}>เลือกม้า:</div>
-              <div style={{display:"flex",gap:4,flexWrap:"wrap",marginBottom:6}}>
-                {HORSE_NAMES.map((name,i)=>(
-                  <button key={i} onClick={()=>setRacePickedHorse(racePickedHorse===i?-1:i)} style={{
-                    padding:"5px 9px",borderRadius:7,cursor:"pointer",fontFamily:G.font,
-                    border:`1px solid ${racePickedHorse===i?HORSE_COLORS[i]+"66":"#ffffff15"}`,
-                    background:racePickedHorse===i?`${HORSE_COLORS[i]}20`:"#ffffff06",
-                    color:racePickedHorse===i?HORSE_COLORS[i]:"#ffffff55",fontSize:10,fontWeight:700,
-                  }}>{HORSE_EMOJIS[i]} {name}</button>
-                ))}
-              </div>
-              {racePickedHorse>=0 && (
-                <div style={{display:"flex",gap:4,alignItems:"center"}}>
-                  <span style={{fontSize:9,color:HORSE_COLORS[racePickedHorse],marginRight:2}}>{HORSE_EMOJIS[racePickedHorse]}</span>
-                  {[100,300,500,1000].filter(v=>v<=cashR.current).map(v=>(
-                    <button key={v} onClick={()=>doRaceBet(racePickedHorse,v)} style={{
-                      padding:"5px 9px",borderRadius:6,cursor:"pointer",fontFamily:G.font,fontSize:10,fontWeight:700,
-                      border:"1px solid #fbbf2430",background:"#fbbf2412",color:"#fbbf24",
-                    }}>฿{v}</button>
-                  ))}
-                </div>
-              )}
-              {/* NPC bets */}
-              <div style={{marginTop:6,fontSize:8,color:"#ffffff33",display:"flex",gap:8,flexWrap:"wrap"}}>
-                {HORSE_NAMES.map((name,i)=>race.npcBets[i].length>0&&(
-                  <span key={i}>{HORSE_EMOJIS[i]} {race.npcBets[i].map(b=>b.nick).join(' ')}</span>
-                ))}
-              </div>
-            </div>
-          )}
-          {race.phase==='betting' && race.playerBet && (
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-              <div style={{fontSize:9,color:"#4ade80"}}>✓ เดิมพัน {HORSE_EMOJIS[race.playerBet.horse]} {HORSE_NAMES[race.playerBet.horse]} ฿{race.playerBet.amount.toLocaleString()} — รอแข่ง</div>
-              <div style={{fontSize:8,color:"#ffffff33",display:"flex",gap:8,flexWrap:"wrap"}}>
-                {HORSE_NAMES.map((name,i)=>race.npcBets[i].length>0&&(
-                  <span key={i}>{HORSE_EMOJIS[i]} {race.npcBets[i].map(b=>b.nick).join(' ')}</span>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
-      )}
-
       {/* ── AUCTION BANNER ── */}
       {auction && (
         <div style={{margin:"5px 14px",padding:"10px 14px",borderRadius:11,
@@ -4884,7 +4789,7 @@ const myRank = allP.findIndex(p=>p.isMe)+1;
       {modal==="plinko"    && <PlinkoModal    key={plinkoKey} onResult={handleGambleResult} onClose={()=>setModal(null)} onPlayAgain={handlePlinkoPlayAgain} bet={activeBetR.current||GAMBLE_COSTS.plinko}/>}
       {modal==="mines"     && <MinesModal     onResult={handleGambleResult} onClose={()=>cancelGamble("mines")}     bet={activeBetR.current||GAMBLE_COSTS.mines}/>}
       {modal==="blackjack" && <BlackjackModal onResult={handleGambleResult} onClose={()=>cancelGamble("blackjack")} onDoubleBet={handleBlackjackDouble} bet={activeBetR.current||GAMBLE_COSTS.blackjack} maxCash={cash}/>}
-      {modal==="horserace" && <HorseRaceWatchModal race={race} pickedHorse={racePickedHorse} onPickHorse={setRacePickedHorse} onBet={doRaceBet} cash={cash} onClose={()=>setModal(null)}/>}
+      {modal==="horserace" && <HorseRaceWatchModal raceR={raceR} pickedHorse={racePickedHorse} onPickHorse={setRacePickedHorse} onBet={doRaceBet} cash={cash} onClose={()=>setModal(null)}/>}
       {betSelectId && <BetSelectorModal gameId={betSelectId} cash={cash} onConfirm={(b)=>openGamble(betSelectId,b)} onClose={()=>setBetSelectId(null)}/>}
 
       {/* ADMIN PANEL — โผล่หลังพิม adminNPY ครั้งแรก */}
