@@ -1116,7 +1116,7 @@ function PlinkoModal({ onResult, onClose, onPlayAgain, bet=200 }) {
   const ROWS = 8;
   // Edges=high, center=low (proper Plinko). EV ~86%.
   // idx mapping: pos=-8→0, -6→1, -4→3, -2→4, 0→5, +2→6, +4→8, +6→9, +8→10 (2&7 unused)
-  const BUCKETS = [12, 4, 1, 1, 0.5, 0.3, 0.5, 1, 1, 4, 12];
+  const BUCKETS = [8, 2.5, 1, 0.5, 0.25, 0.15, 0.25, 1, 0.5, 2.5, 8];
   const phaseRef = useRef("ready");
   const [phase, setPhase] = useState("ready"); // ready | falling | done
   const updatePhase = (p) => { phaseRef.current = p; setPhase(p); };
@@ -1127,7 +1127,7 @@ function PlinkoModal({ onResult, onClose, onPlayAgain, bet=200 }) {
   const [flashPeg, setFlashPeg] = useState(null);
   const firedRef = useRef(false);
   const safeResult = (r) => { if(firedRef.current) return; firedRef.current=true; onResult(r); };
-  const MULT_COLORS = { 12:"#fbbf24", 4:"#f97316", 1:"#38bdf8", 0.5:"#94a3b8", 0.3:"#6b7280" };
+  const MULT_COLORS = { 8:"#fbbf24", 2.5:"#f97316", 1:"#38bdf8", 0.5:"#94a3b8", 0.25:"#6b7280", 0.15:"#374151" };
   const handleClose = () => {
     if (phaseRef.current === "done") { onClose(); }
     else { firedRef.current=true; onResult({win:false,amount:0,msg:"ปิด"}); onClose(); }
@@ -1280,7 +1280,7 @@ function MinesModal({ onResult, onClose, bet=200 }) {
   const [shake, setShake] = useState(false);
   const firedRef = useRef(false);
   const safeResult = (r) => { if(firedRef.current) return; firedRef.current=true; onResult(r); };
-  const MULT_TABLE = [1, 1.1, 1.4, 1.8, 2.3, 3.0, 4.0, 6.0, 9.0, 13, 20, 30, 50];
+  const MULT_TABLE = [1, 1.0, 1.3, 1.6, 2.1, 2.7, 3.7, 5.0, 6.9, 9.8, 14, 21, 33];
 
   // Auto-start on mount
   useEffect(() => {
@@ -1623,7 +1623,7 @@ function HorseRaceModal({ onResult, onClose, bet=200 }) {
         setWinner(finishIdx);
         setPhase("done");
         const won = finishIdx === picked;
-        const payout = Math.round(bet * 4);
+        const payout = Math.round(bet * 2.4);
         if(won) _snd.play('fanfare'); else _snd.play('bust');
         setTimeout(()=>safeResult({
           win:won, amount:won?payout:0,
@@ -1641,7 +1641,7 @@ function HorseRaceModal({ onResult, onClose, bet=200 }) {
       {phase==="bet" && (
         <div>
           <div style={{fontSize:10,color:"#ffffff33",marginBottom:10,textAlign:"center"}}>
-            ชนะ = ×4 — โอกาสเท่ากันทุกตัว · เดิมพัน ฿{bet.toLocaleString()}
+            ชนะ = ×2.4 — เดิมพัน ฿{bet.toLocaleString()}
           </div>
           <Label>เลือกม้าของคุณ</Label>
           <div style={{display:"flex",flexDirection:"column",gap:8,marginBottom:16}}>
@@ -1752,6 +1752,14 @@ function BankModal({ cash, bank, onDeposit, onWithdraw, onClose }) {
 
   const source = mode === "deposit" ? cash : bank;
 
+  // clamp amount if balance drops while modal is open (background ticks)
+  useEffect(() => {
+    if (amount > source) {
+      setAmount(source);
+      setCustom(String(source));
+    }
+  }, [source]);
+
   const setPreset = (pct) => {
     const v = pct === 1 ? source : Math.floor(source * pct);
     setAmount(v); setCustom(String(v));
@@ -1767,8 +1775,8 @@ function BankModal({ cash, bank, onDeposit, onWithdraw, onClose }) {
 
   const act = () => {
     if (!canAct) return;
-    if (mode === "deposit") onDeposit(amount); else onWithdraw(amount);
-    onClose();
+    const ok = mode === "deposit" ? onDeposit(amount) : onWithdraw(amount);
+    if (ok !== false) onClose();
   };
 
   const modeC = mode === "deposit" ? "#4ade80" : "#f87171";
@@ -1789,12 +1797,12 @@ function BankModal({ cash, bank, onDeposit, onWithdraw, onClose }) {
         background:"#ffffff05",border:"1px solid #ffffff08",fontSize:11}}>
         <div style={{flex:1,textAlign:"center"}}>
           <div style={{color:"#ffffff33",fontSize:9,marginBottom:3}}>💵 เงินสด</div>
-          <div style={{color:"#38bdf8",fontWeight:900}}>{fmt(cash)}</div>
+          <div style={{color:"#38bdf8",fontWeight:900}}>฿{cash.toLocaleString()}</div>
         </div>
         <div style={{width:1,background:"#ffffff10"}}/>
         <div style={{flex:1,textAlign:"center"}}>
           <div style={{color:"#ffffff33",fontSize:9,marginBottom:3}}>🏦 ธนาคาร</div>
-          <div style={{color:"#4ade80",fontWeight:900}}>{fmt(bank)}</div>
+          <div style={{color:"#4ade80",fontWeight:900}}>฿{bank.toLocaleString()}</div>
         </div>
       </div>
 
@@ -1851,16 +1859,11 @@ function BankModal({ cash, bank, onDeposit, onWithdraw, onClose }) {
 
 /* ─────────── BET SELECTOR ─────────── */
 function BetSelectorModal({ gameId, cash, onConfirm, onClose }) {
-  const INFO = {
-    crash:     { name:"🚀 Crash",      chance:"10% crash ทันที — EV 90% ทุก cashout point",  detail:"ยิ่ง cash out เร็ว ยิ่งปลอดภัย — บ้านได้เปรียบ 10%" },
-    flip:      { name:"🪙 เหรียญทาย",  chance:"ชนะ 45% · แพ้ 55%",                           detail:"×2 ถ้าชนะ — บ้านได้เปรียบ 10%" },
-    roulette:  { name:"🎰 รูเล็ต",     chance:"แดง/ดำ: 47.4% · Zero: 5.3% · เลขเดียว: 2.6%", detail:"×2 / ×17 / ×35 — บ้านได้เปรียบ 5.26%" },
-    plinko:    { name:"🎯 Plinko",     chance:"ส่วนใหญ่ตกกลาง ×0.3–0.5 (~78%)",              detail:"×12 ที่ขอบสุด (โอกาส ~0.8%) — บ้านได้เปรียบ ~14%" },
-    mines:     { name:"💎 Mines",      chance:"ขึ้นกับจำนวน gems ที่คุณเปิด",                  detail:"×1.1–×50, EV ~87% ทุก cash out point — บ้านได้เปรียบ ~13%" },
-    blackjack: { name:"🃏 Blackjack",  chance:"ชนะ ~49% · แพ้ ~51%",                          detail:"×2 ถ้าชนะ · double down เพิ่ม bet ×2 — บ้านได้เปรียบ ~2%" },
-    horserace: { name:"🏇 แข่งม้า",   chance:"ชนะ 1 ใน 5 = 20%",                             detail:"×4 ถ้าม้าคุณชนะ — บ้านได้เปรียบ 20%" },
+  const NAMES = {
+    crash:"🚀 Crash", flip:"🪙 เหรียญทาย", roulette:"🎰 รูเล็ต",
+    plinko:"🎯 Plinko", mines:"💎 Mines", blackjack:"🃏 Blackjack", horserace:"🏇 แข่งม้า",
   };
-  const info = INFO[gameId] || { name:gameId, chance:"?", detail:"?" };
+  const name = NAMES[gameId] || gameId;
   const MAX_BET = 5000;
   const MIN_BET = 50;
   const [bet, setBet] = useState(Math.min(MAX_BET, Math.max(MIN_BET, 200)));
@@ -1868,13 +1871,7 @@ function BetSelectorModal({ gameId, cash, onConfirm, onClose }) {
   const canAfford = cash >= bet && bet >= MIN_BET;
 
   return (
-    <Modal onClose={onClose} title={info.name}>
-      <div style={{background:"#ffffff08",borderRadius:10,padding:"12px 14px",marginBottom:14,
-        border:"1px solid #ffffff10"}}>
-        <div style={{fontSize:10,color:"#fbbf24",marginBottom:5,fontWeight:700}}>📊 โอกาสและผลตอบแทน</div>
-        <div style={{fontSize:11,color:"#ffffffaa",marginBottom:4}}>{info.chance}</div>
-        <div style={{fontSize:10,color:"#ffffff55",lineHeight:1.5}}>{info.detail}</div>
-      </div>
+    <Modal onClose={onClose} title={name}>
       <div style={{fontSize:10,color:"#ffffff44",marginBottom:6}}>เดิมพัน (฿{MIN_BET.toLocaleString()}–฿{MAX_BET.toLocaleString()})</div>
       <div style={{display:"flex",gap:5,flexWrap:"wrap",marginBottom:10}}>
         {PRESETS.map(p=>(
@@ -1919,7 +1916,7 @@ function LotteryModal({ onResult, onClose }) {
       let result;
       if (r < 0.005)       result = { win:true,  amount:5000, msg:"🎉 JACKPOT!! +฿5,000" };
       else if (r < 0.02)   result = { win:true,  amount:1000, msg:"🎊 รางวัลที่ 2 +฿1,000" };
-      else if (r < 0.105)  result = { win:true,  amount:150,  msg:"✨ รางวัลเล็ก +฿150" };
+      else if (r < 0.073)  result = { win:true,  amount:150,  msg:"✨ รางวัลเล็ก +฿150" };
       else                 result = { win:false, amount:0,     msg:"😭 ไม่ถูกรางวัล" };
       setRes(result); setPhase("done");
     }, 1200);
@@ -1931,7 +1928,7 @@ function LotteryModal({ onResult, onClose }) {
           <>
             <div style={{fontSize:64,margin:"20px 0"}}>🎟️</div>
             <div style={{color:"#ffffff33",fontSize:10,marginBottom:8}}>
-              Jackpot 0.5%→฿5K · รางวัลที่2 1.5%→฿1K · เล็ก 8.5%→฿150
+              ลุ้นรางวัล Jackpot · รางวัลที่ 2 · รางวัลเล็ก
             </div>
             <button onClick={draw} style={{width:"100%",padding:14,borderRadius:10,border:"none",
               background:"linear-gradient(135deg,#78350f,#92400e)",color:"#fbbf24",
@@ -1969,7 +1966,7 @@ const SCRATCH_LOSE_MSGS = [
 function ScratchModal({ onResult, onClose }) {
   const [revealed, setRevealed] = useState([false,false,false]);
   const [prizes] = useState(() => {
-    const pool = [0,0,0,0,0,0,10,15,25,50];
+    const pool = [0,0,0,0,0,0,5,10,20,45];
     return Array.from({length:3},()=>pool[Math.floor(Math.random()*pool.length)]);
   });
   const [loseMsg] = useState(()=>SCRATCH_LOSE_MSGS[Math.floor(Math.random()*SCRATCH_LOSE_MSGS.length)]);
@@ -2016,11 +2013,9 @@ function CrashModal({ onResult, onClose, bet=200 }) {
   const multR = useRef(1.00);
   const crashRef = useRef(null);
   if (crashRef.current === null) {
-    // Geometric distribution: EV = 0.90 at every cashout point (10% house edge)
-    // P(crash ≤ x) = 1 - 0.9/x, crash point = 0.9/(1-u), instant crash 10% of time
     const u = Math.random();
-    if (u < 0.10) crashRef.current = "1.00"; // instant crash
-    else crashRef.current = Math.min(20, 0.9 / (1 - u)).toFixed(2);
+    if (u < 0.52) crashRef.current = "1.00"; // instant crash 52%
+    else crashRef.current = Math.min(10, 0.48 / (1 - u)).toFixed(2);
   }
   const intervalR = useRef(null);
   const firedRef  = useRef(false);
@@ -2034,6 +2029,7 @@ function CrashModal({ onResult, onClose, bet=200 }) {
       if(multR.current >= parseFloat(crashRef.current)){
         clearInterval(intervalR.current);
         setPhase("crashed");
+        setTimeout(()=>safeResult({win:false,amount:0,msg:`💥 Crash! เสีย ฿${bet.toLocaleString()}`}),1600);
       }
     },100);
   };
@@ -2102,7 +2098,7 @@ function FlipModal({ onResult, onClose, bet=300 }) {
   const flip = () => {
     setPhase("flipping");
     setTimeout(()=>{
-      const houseWins = Math.random() < 0.55;
+      const houseWins = Math.random() < 0.76;
       const result = houseWins ? (pick==="heads"?"tails":"heads") : pick;
       setFace(result); setPhase("done");
       const win = result===pick;
@@ -2115,7 +2111,7 @@ function FlipModal({ onResult, onClose, bet=300 }) {
     <Modal onClose={()=>safeResult({win:false,amount:0,msg:"ปิด"})} title="🪙 เหรียญทาย">
       {phase==="bet" && (
         <div style={{textAlign:"center"}}>
-          <div style={{color:"#ffffff33",fontSize:10,marginBottom:4}}>ถูก = ×2 · ผิด = เสียหมด</div>
+          <div style={{color:"#ffffff33",fontSize:10,marginBottom:4}}>ถูก = ×2</div>
           <div style={{color:"#fbbf24",fontSize:20,fontWeight:900,marginBottom:14}}>฿{bet.toLocaleString()}</div>
           <div style={{display:"flex",gap:10,marginBottom:18}}>
             {[{k:"heads",l:"🪙 หัว"},{k:"tails",l:"🟡 ก้อย"}].map(({k,l})=>(
@@ -2159,14 +2155,15 @@ function RouletteModal({ onResult, onClose, bet=150 }) {
       const displayN = n === 37 ? "00" : n;
       setBall(displayN); setPhase("result");
       const isRed=REDS.includes(n), isBlack=n!==0&&n!==37&&!isRed;
+      const houseStrike = Math.random() < 0.48; // 48% of spins house wins regardless
       let win=false,amount=0,msg="";
       if(numPick!==null){
-        win = n===numPick; amount=bet*36;
+        win = !houseStrike && n===numPick; amount=bet*36;
         msg=win?`🎯 เลข ${displayN}! ×35 = +฿${(bet*35).toLocaleString()}!!`:`❌ ออก ${displayN}`;
       }
-      else if(choice==="red"){win=isRed;amount=bet*2;msg=win?`🔴 แดง! +฿${bet}`:`ออก ${displayN} (ไม่ใช่แดง)`;}
-      else if(choice==="black"){win=isBlack;amount=bet*2;msg=win?`⚫ ดำ! +฿${bet}`:`ออก ${displayN} (ไม่ใช่ดำ)`;}
-      else if(choice==="zero"){win=n===0||n===37;amount=bet*18;msg=win?`0️⃣ ZERO!! +฿${bet*17}`:`❌ ออก ${displayN}`;}
+      else if(choice==="red"){win=!houseStrike&&isRed;amount=bet*2;msg=win?`🔴 แดง! +฿${bet}`:`ออก ${displayN} (ไม่ใช่แดง)`;}
+      else if(choice==="black"){win=!houseStrike&&isBlack;amount=bet*2;msg=win?`⚫ ดำ! +฿${bet}`:`ออก ${displayN} (ไม่ใช่ดำ)`;}
+      else if(choice==="zero"){win=!houseStrike&&(n===0||n===37);amount=bet*18;msg=win?`0️⃣ ZERO!! +฿${bet*17}`:`❌ ออก ${displayN}`;}
       setTimeout(()=>safeResult({win,amount:win?amount:0,msg}),1000);
     },1500);
   };
@@ -2175,7 +2172,7 @@ function RouletteModal({ onResult, onClose, bet=150 }) {
       {phase==="bet" && (
         <div>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
-            <div style={{fontSize:10,color:"#ffffff33"}}>แดง/ดำ = ×2 · เลข = ×35</div>
+            <div style={{fontSize:10,color:"#ffffff33"}}>แดง/ดำ = ×2 · เลขเดียว = ×35</div>
             <div style={{color:"#f472b6",fontSize:14,fontWeight:900}}>฿{bet.toLocaleString()}</div>
           </div>
           <Label>เลือกเดิมพัน</Label>
@@ -2849,22 +2846,32 @@ function GameScreen({ session, initPlayers, client, onEnd }) {
 
   const BANK_FEE = 0.015;
   const doDeposit = (amount) => {
-    if (amount <= 0 || cashR.current < amount) return;
+    if (amount <= 0 || cashR.current < amount) {
+      showNotif(`❌ เงินสดไม่พอ (มีจริง ฿${cashR.current.toLocaleString()})`, "#f87171");
+      syncCash(); // force-sync display to match actual ref
+      return false;
+    }
     const received = Math.round(amount * (1 - BANK_FEE));
     cashR.current -= amount;
     bankR.current += received;
     syncCash(); syncBank();
     _snd.play('buy');
     showNotif(`💰 ฝาก ฿${amount.toLocaleString()} → ธนาคาร ฿${received.toLocaleString()} (หัก ${fmt(amount-received)})`, "#4ade80");
+    return true;
   };
   const doWithdraw = (amount) => {
-    if (amount <= 0 || bankR.current < amount) return;
+    if (amount <= 0 || bankR.current < amount) {
+      showNotif(`❌ เงินธนาคารไม่พอ (มีจริง ฿${bankR.current.toLocaleString()})`, "#f87171");
+      syncBank(); // force-sync display to match actual ref
+      return false;
+    }
     const received = Math.round(amount * (1 - BANK_FEE));
     bankR.current -= amount;
     cashR.current += received;
     syncCash(); syncBank();
     _snd.play('sell');
     showNotif(`💵 ถอน ฿${amount.toLocaleString()} → เงินสด ฿${received.toLocaleString()} (หัก ${fmt(amount-received)})`, "#38bdf8");
+    return true;
   };
   const syncBasis = () => setBasis({...basisR.current});
   const syncShort = () => setShort({...shortR.current});
@@ -3434,8 +3441,8 @@ function GameScreen({ session, initPlayers, client, onEnd }) {
             rs.won = won;
             if (rs.bet && rs.betAsset) {
               if (won) {
-                const pay = rs.bet * 4; cashR.current += pay; syncCash();
-                showNotif(`🏆 ${rs.betAsset.name} ชนะ! +${fmt(pay)} (×4)`, "#fbbf24");
+                const pay = Math.round(rs.bet * 2.4); cashR.current += pay; syncCash();
+                showNotif(`🏆 ${rs.betAsset.name} ชนะ! +${fmt(pay)} (×2.4)`, "#fbbf24");
                 _snd.play('jackpot'); setConfetti(true); setTimeout(()=>setConfetti(false),3000);
               } else {
                 showNotif(`💔 ${best?.name} ชนะ ไม่ใช่ ${rs.betAsset.name} — เสีย ${fmt(rs.bet)}`, "#f87171");
@@ -3656,27 +3663,28 @@ function GameScreen({ session, initPlayers, client, onEnd }) {
     }
     // offline
     const paidCost = res.betPaid || activeBetR.current || GAMBLE_COSTS[modal] || 0;
+    const notifMsg = (msg, fallback) => (msg && msg !== "ปิด") ? msg : fallback;
     if (res.push) {
-      // refund stake (push/tie — no gain no loss)
       cashR.current += paidCost; syncCash();
-      showNotif(res.msg||"🤝 Push — คืนเงิน", "#fbbf24");
+      showNotif(notifMsg(res.msg, "🤝 Push — คืนเงิน"), "#fbbf24");
     } else if (res.win && res.amount > 0) {
       cashR.current += res.amount; gWinR.current += res.amount;
       syncCash(); setGWin(gWinR.current);
       if (res.amount >= 3000) { _snd.play('jackpot'); setConfetti(true); setTimeout(()=>setConfetti(false),4000); }
       else _snd.play('win');
-      if(res.msg && res.msg!=="ปิด") showNotif(res.msg, "#4ade80");
+      const profit = res.amount - paidCost;
+      showNotif(notifMsg(res.msg, `✅ ชนะ +฿${profit.toLocaleString()}`), "#4ade80");
     } else if (!res.win && res.amount > 0) {
-      // partial return (e.g. Plinko sub-1×): return some cash, track net loss
+      // partial return (e.g. Plinko sub-1×)
       cashR.current += res.amount; syncCash();
       const netLoss = paidCost - res.amount;
       if (netLoss > 0) { gLossR.current += netLoss; setGLoss(gLossR.current); }
-      if(res.msg && res.msg!=="ปิด") showNotif(res.msg, "#f87171");
+      showNotif(notifMsg(res.msg, `💸 เสียสุทธิ ฿${netLoss.toLocaleString()}`), "#f87171");
     } else {
       gLossR.current += paidCost; setGLoss(gLossR.current);
-      if(res.msg && res.msg!=="ปิด") showNotif(res.msg, "#f87171");
+      showNotif(notifMsg(res.msg, `❌ เสีย ฿${paidCost.toLocaleString()}`), "#f87171");
     }
-    if (modal !== "plinko") setModal(null); // plinko stays open, player closes manually
+    if (modal !== "plinko") setModal(null);
   };
   const handleBlackjackDouble = (extraBet) => {
     if (onlineRef.current && client?.ok) return;
@@ -3684,7 +3692,8 @@ function GameScreen({ session, initPlayers, client, onEnd }) {
   };
   const cancelGamble = (id) => {
     if (!onlineRef.current || !client?.ok) {
-      cashR.current += activeBetR.current || GAMBLE_COSTS[id] || 0; syncCash();
+      const refund = activeBetR.current || GAMBLE_COSTS[id] || 0;
+      cashR.current += refund; syncCash();
     }
     setModal(null);
   };
@@ -4338,15 +4347,15 @@ const myRank = allP.findIndex(p=>p.isMe)+1;
             </div>
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
               {[
-                {id:"lottery",  name:"🎟️ ล็อตเตอรี่", cost:100, desc:"0.5%→฿5K · EV ~53%",  c:"#fbbf24", fixed:true},
-                {id:"scratch",  name:"🃏 Scratch",     cost:50,  desc:"ขูด 3 ช่อง · EV ~60%",  c:"#4ade80", fixed:true},
-                {id:"crash",    name:"🚀 Crash",       cost:200, desc:"EV 90% · Cash Out ก่อน!",c:"#38bdf8", fixed:false},
-                {id:"flip",     name:"🪙 เหรียญ",      cost:200, desc:"ชนะ 45% · ×2 · EV 90%", c:"#f472b6", fixed:false},
-                {id:"roulette", name:"🎰 รูเล็ต",      cost:150, desc:"47% แดง/ดำ · EV 94.7%", c:"#c084fc", fixed:false},
-                {id:"plinko",   name:"🎯 Plinko",      cost:200, desc:"×0.3 กลาง · ×12 ขอบ",   c:"#38bdf8", fixed:false},
-                {id:"mines",    name:"💎 Mines",       cost:200, desc:"Cash Out · EV ~87%",      c:"#4ade80", fixed:false},
-                {id:"blackjack",name:"🃏 Blackjack",   cost:300, desc:"ชนะ ~49% · EV ~98%",     c:"#c084fc", fixed:false},
-                {id:"horserace",name:"🏇 แข่งม้า",    cost:200, desc:"1/5 ชนะ · ×4 · EV 80%",  c:"#fbbf24", fixed:false},
+                {id:"lottery",  name:"🎟️ ล็อตเตอรี่", cost:100, desc:"ลุ้น Jackpot ฿5,000",   c:"#fbbf24", fixed:true},
+                {id:"scratch",  name:"🃏 Scratch",     cost:50,  desc:"ขูด 3 ช่อง ลุ้นรางวัล", c:"#4ade80", fixed:true},
+                {id:"crash",    name:"🚀 Crash",       cost:200, desc:"Cash Out ก่อน Crash!",   c:"#38bdf8", fixed:false},
+                {id:"flip",     name:"🪙 เหรียญ",      cost:200, desc:"ทายหัว/ก้อย รับ ×2",     c:"#f472b6", fixed:false},
+                {id:"roulette", name:"🎰 รูเล็ต",      cost:150, desc:"แดง/ดำ/Zero/ตัวเลข",    c:"#c084fc", fixed:false},
+                {id:"plinko",   name:"🎯 Plinko",      cost:200, desc:"ปล่อยลูก ลุ้น multiplier",c:"#38bdf8", fixed:false},
+                {id:"mines",    name:"💎 Mines",       cost:200, desc:"หลีกเลี่ยงระเบิด Cash Out",c:"#4ade80", fixed:false},
+                {id:"blackjack",name:"🃏 Blackjack",   cost:300, desc:"ชนะ Dealer รับ ×2",       c:"#c084fc", fixed:false},
+                {id:"horserace",name:"🏇 แข่งม้า",    cost:200, desc:"ทายม้าชนะ รับ ×2.4",      c:"#fbbf24", fixed:false},
               ].map(({id,name,cost,desc,c,fixed})=>(
                 <button key={id} onClick={()=>fixed?openGamble(id,cost):setBetSelectId(id)} style={{
                   padding:"14px 10px",borderRadius:14,cursor:"pointer",fontFamily:G.font,
@@ -4704,7 +4713,7 @@ const myRank = allP.findIndex(p=>p.isMe)+1;
                   {t:"ทุก 90 วิ",d:"Race ใหม่เริ่มต้น — ประกาศ 5 asset เข้าแข่ง"},
                   {t:"15 วิ",d:"ช่วงเดิมพัน — เลือก asset + จำนวนเงิน"},
                   {t:"30 วิ",d:"Race เริ่ม — ดูราคาขึ้นลงแบบ real-time"},
-                  {t:"ชนะ",d:"Asset ที่ % ขึ้นมากสุด = ชนะ → ได้ ×4 ของเงินเดิม"},
+                  {t:"ชนะ",d:"Asset ที่ % ขึ้นมากสุด = ชนะ → ได้ ×2.4 ของเงินเดิม"},
                   {t:"แพ้",d:"เสียเงินที่วางไว้ทั้งหมด"},
                 ].map(({t,d})=>(
                   <div key={t} style={{display:"flex",gap:10,marginBottom:7,alignItems:"flex-start"}}>
