@@ -3816,7 +3816,7 @@ const myRank = allP.findIndex(p=>p.isMe)+1;
       {modal==="roulette" && <RouletteModal onResult={handleGambleResult} onClose={()=>cancelGamble("roulette")}/>}
 
       {/* ADMIN PANEL — เปิดด้วย adminNPY ในแชท */}
-      {adminOpen && <AdminPanel onCmd={handleAdminCmd} onClose={()=>setAdminOpen(false)}/>}
+{false && <AdminPanel onCmd={handleAdminCmd}/>} 
     </div>
   );
 }
