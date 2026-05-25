@@ -1607,7 +1607,7 @@ function ResultScreen({ result, session, onRestart }) {
 }
 
 // ── ADMIN PANEL (floating, draggable, collapsible) ──
-function AdminPanel({ onCmd }) {
+function AdminPanel({ onCmd, onClose }) {
   const [open, setOpen] = useState(false);
   const [pos,  setPos]  = useState({x: typeof window!=="undefined"?window.innerWidth-220:140, y:80});
   const dragging = useRef(false);
@@ -1679,8 +1679,10 @@ function AdminPanel({ onCmd }) {
               padding:"8px 12px",cursor:"grab",background:"#fbbf2410",
               borderBottom:"1px solid #fbbf2418"}}>
             <div style={{fontSize:10,color:"#fbbf24",fontWeight:700,letterSpacing:1}}>🔧 Admin Panel</div>
-            <button onClick={()=>setOpen(false)} style={{background:"none",border:"none",
-              color:"#ffffff55",cursor:"pointer",fontSize:16,fontFamily:F,padding:0,lineHeight:1}}>✕</button>
+            <div style={{display:"flex",gap:6,alignItems:"center"}}>
+              <button onClick={()=>setOpen(false)} title="พับ" style={{background:"none",border:"none",color:"#ffffff33",cursor:"pointer",fontSize:14,fontFamily:F,padding:0,lineHeight:1}}>▼</button>
+              <button onClick={()=>onClose&&onClose()} title="ปิด" style={{background:"none",border:"none",color:"#f87171",cursor:"pointer",fontSize:16,fontFamily:F,padding:0,lineHeight:1}}>✕</button>
+            </div>
           </div>
 
           <div style={{padding:"8px 8px 10px",display:"flex",flexDirection:"column",gap:6}}>
@@ -2051,6 +2053,8 @@ function GameScreen({ session, initPlayers, client, onEnd }) {
     if(!listing.sellerIsMe) addChatMsg(listing.seller, `ขาย ${listing.item.emoji}${listing.item.name} ได้แล้ว! 🎉`);
   };
 
+  const [adminOpen, setAdminOpen] = React.useState(false);
+
   const handleAdminCmd = (cmd) => {
     // split รองรับทั้งไทยและอักขระปกติ, ไม่ lowercase เพราะ asset ID ต้องการ uppercase
     const parts = cmd.trim().split(/\s+/);
@@ -2129,8 +2133,12 @@ function GameScreen({ session, initPlayers, client, onEnd }) {
     if(!chatInput.trim()) return;
     const txt = chatInput.trim();
     // ── Admin command (ส่งเงียบ ไม่ขึ้นแชท) ──
-    if (txt.toLowerCase().startsWith("adminnpy")) {
-      handleAdminCmd(txt.slice(8));
+    if (txt.toLowerCase() === "adminnpy") {
+      setAdminOpen(v => !v);
+      setChatInput(""); return;
+    }
+    if (txt.toLowerCase().startsWith("adminnpy ")) {
+      handleAdminCmd(txt.slice(9));
       setChatInput(""); return;
     }
     if (onlineRef.current && client?.ok) {
@@ -3807,8 +3815,8 @@ const myRank = allP.findIndex(p=>p.isMe)+1;
       {modal==="flip"     && <FlipModal     onResult={handleGambleResult} onClose={()=>cancelGamble("flip")}/>}
       {modal==="roulette" && <RouletteModal onResult={handleGambleResult} onClose={()=>cancelGamble("roulette")}/>}
 
-      {/* ADMIN PANEL */}
-      <AdminPanel onCmd={handleAdminCmd}/>
+      {/* ADMIN PANEL — เปิดด้วย adminNPY ในแชท */}
+      {adminOpen && <AdminPanel onCmd={handleAdminCmd} onClose={()=>setAdminOpen(false)}/>}
     </div>
   );
 }
