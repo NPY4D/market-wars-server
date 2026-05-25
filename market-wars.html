@@ -1426,6 +1426,7 @@ function BlackjackModal({ onResult, onClose, onDoubleBet, bet=300, maxCash=Infin
   const [msg, setMsg] = useState("");
   const [doubled, setDoubled] = useState(false);
   const [newCard, setNewCard] = useState(null); // for flash animation
+  const [newDealerCard, setNewDealerCard] = useState(null);
   const deckRef = useRef([]);
   const firedRef = useRef(false);
   const safeResult = (r) => { if(firedRef.current) return; firedRef.current=true; onResult(r); };
@@ -1451,42 +1452,46 @@ function BlackjackModal({ onResult, onClose, onDoubleBet, bet=300, maxCash=Infin
   }, []);
 
   const endRound = (pCards, dCards, isDoubled) => {
-    const dc = [...dCards];
-    while(handScore(dc)<17) { dc.push(drawCard()); }
-    setDealerCards(dc);
-    setPhase("done");
-    const ps = handScore(pCards), ds = handScore(dc);
+    const ps = handScore(pCards);
     const activeBet = isDoubled ? bet*2 : bet;
-    let resultMsg="";
-    let resultObj = {};
+    // Player bust — skip dealer animation
     if(ps>21) {
+      setPhase("done");
       _snd.play('bust');
-      resultMsg=`💥 Bust! เสีย ฿${activeBet.toLocaleString()}`;
-      resultObj={win:false,amount:0,msg:resultMsg,betPaid:activeBet};
-    } else if(ds>21) {
-      _snd.play('win');
-      resultMsg=`🎉 Dealer Bust! +฿${activeBet.toLocaleString()}`;
-      resultObj={win:true,amount:activeBet*2,msg:resultMsg};
-    } else if(ps===21&&pCards.length===2&&ds!==21) {
-      _snd.play('jackpot');
-      const bj = Math.round(activeBet*2.5);
-      resultMsg=`🃏 BLACKJACK! ×1.5 +฿${Math.round(activeBet*1.5).toLocaleString()}`;
-      resultObj={win:true,amount:bj,msg:resultMsg};
-    } else if(ps>ds) {
-      _snd.play('win');
-      resultMsg=`✅ ชนะ ${ps} vs ${ds}! +฿${activeBet.toLocaleString()}`;
-      resultObj={win:true,amount:activeBet*2,msg:resultMsg};
-    } else if(ps===ds) {
-      _snd.play('beep');
-      resultMsg=`🤝 Push — คืนเงิน`;
-      resultObj={push:true,msg:resultMsg,betPaid:activeBet};
-    } else {
-      _snd.play('bust');
-      resultMsg=`❌ แพ้ ${ps} vs ${ds} — เสีย ฿${activeBet.toLocaleString()}`;
-      resultObj={win:false,amount:0,msg:resultMsg,betPaid:activeBet};
+      const resultMsg=`💥 Bust! เสีย ฿${activeBet.toLocaleString()}`;
+      setMsg(resultMsg);
+      setTimeout(()=>safeResult({win:false,amount:0,msg:resultMsg,betPaid:activeBet}),1200);
+      return;
     }
-    setMsg(resultMsg);
-    setTimeout(()=>safeResult(resultObj),1600);
+    // Pre-calculate all extra cards the dealer needs
+    const extras = [];
+    const tmp = [...dCards];
+    while(handScore(tmp)<17){ const c=drawCard(); tmp.push(c); extras.push(c); }
+    setPhase("dealer");
+    // Reveal one card every 750ms, then show result
+    const reveal = (idx, current) => {
+      if(idx>=extras.length) {
+        const ds=handScore(current);
+        let resultMsg="", resultObj={};
+        if(ds>21){ _snd.play('win'); resultMsg=`🎉 Dealer Bust! +฿${activeBet.toLocaleString()}`; resultObj={win:true,amount:activeBet*2,msg:resultMsg}; }
+        else if(ps===21&&pCards.length===2&&ds!==21){ _snd.play('jackpot'); resultMsg=`🃏 BLACKJACK! ×1.5 +฿${Math.round(activeBet*1.5).toLocaleString()}`; resultObj={win:true,amount:Math.round(activeBet*2.5),msg:resultMsg}; }
+        else if(ps>ds){ _snd.play('win'); resultMsg=`✅ ชนะ ${ps} vs ${ds}! +฿${activeBet.toLocaleString()}`; resultObj={win:true,amount:activeBet*2,msg:resultMsg}; }
+        else if(ps===ds){ _snd.play('beep'); resultMsg=`🤝 Push — คืนเงิน`; resultObj={push:true,msg:resultMsg,betPaid:activeBet}; }
+        else{ _snd.play('bust'); resultMsg=`❌ แพ้ ${ps} vs ${ds} — เสีย ฿${activeBet.toLocaleString()}`; resultObj={win:false,amount:0,msg:resultMsg,betPaid:activeBet}; }
+        setPhase("done"); setMsg(resultMsg);
+        setTimeout(()=>safeResult(resultObj),1600);
+        return;
+      }
+      const c=extras[idx];
+      const next=[...current,c];
+      _snd.play('card');
+      setDealerCards(next);
+      setNewDealerCard(c);
+      setTimeout(()=>setNewDealerCard(null),400);
+      setTimeout(()=>reveal(idx+1,next),750);
+    };
+    // Wait 500ms for hidden-card flip to complete before dealing extras
+    setTimeout(()=>reveal(0,[...dCards]),500);
   };
 
   const hit = () => {
@@ -1525,7 +1530,11 @@ function BlackjackModal({ onResult, onClose, onDoubleBet, bet=300, maxCash=Infin
         <div style={{marginBottom:14}}>
           <div style={{fontSize:9,letterSpacing:2,color:"#ffffff33",marginBottom:8}}>DEALER {phase!=="playing"?`— ${dScore}`:""}</div>
           <div style={{display:"flex",gap:4,flexWrap:"wrap",minHeight:66}}>
-            {dealerCards.map((c,i)=><CardChip key={i} c={c} hidden={phase==="playing"&&i===1}/>)}
+            {dealerCards.map((c,i)=>(
+              <div key={i} style={{display:"inline-block",animation:newDealerCard===c?"card-deal .35s cubic-bezier(0.34,1.56,0.64,1)":"none"}}>
+                <CardChip c={c} hidden={phase==="playing"&&i===1}/>
+              </div>
+            ))}
           </div>
         </div>
         <div style={{height:1,background:"linear-gradient(90deg,transparent,#ffffff15,transparent)",marginBottom:14}}/>
