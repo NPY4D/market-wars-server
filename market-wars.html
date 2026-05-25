@@ -573,19 +573,22 @@ function WaitingRoom({ session, client, onGo, players, setPlayers }) {
       return [...p, {id:`b${Date.now()}`, nick:BOT_NAMES[botCount]||`Bot${botCount+1}`, name:BOT_NAMES[botCount]||`Bot${botCount+1}`, ready:true, isBot:true}];
     });
   };
+  const hasBots = players.some(p => p.isBot);
+  // ถ้ามี bot → force offline เสมอ (bot เป็น local-only, server ไม่รู้จัก)
+  const effectiveOffline = isOffline || hasBots;
   const toggleReady = () => {
-    if (!isOffline && client?.ok) {
+    if (!effectiveOffline && client?.ok) {
       client.ready();
     } else {
       setPlayers(p=>p.map(x=>x.isMe?{...x,ready:!x.ready}:x));
     }
   };
-  const canStart = isOffline ? players.length >= 2 : (players.length >= 2 && me?.ready);
+  const canStart = effectiveOffline ? players.length >= 2 : (players.length >= 2 && me?.ready);
   const doStart = () => {
-    if (!isOffline && client?.ok) {
+    if (!effectiveOffline && client?.ok) {
       client.start();
     } else {
-      onGo(players);
+      onGo(players, hasBots); // hasBots=true → App จะส่ง null client ให้ GameScreen
     }
   };
   const endLabel = session.endMode==="target" ? `🎯 ${fmt(session.target)}` : `⏱️ ${session.duration/60}min`;
@@ -639,7 +642,7 @@ function WaitingRoom({ session, client, onGo, players, setPlayers }) {
           </PillBtn>
         </div>
         <PillBtn onClick={doStart} color="#38bdf8" disabled={!canStart} full size="lg">
-          {!isOffline ? "🚀 START GAME (Online)" : "🚀 START GAME (Offline)"}
+          {effectiveOffline ? "🚀 START GAME (Offline)" : "🚀 START GAME (Online)"}
         </PillBtn>
       </div>
     </div>
@@ -1181,7 +1184,7 @@ function CrashModal({ onResult, onClose, maxBet }) {
           <div style={{fontSize:10,color:"#ffffff33",marginBottom:8}}>จับไว้! Cash Out ก่อน Crash!</div>
           <Label>เดิมพัน</Label>
           <div style={{display:"flex",gap:7,justifyContent:"center",marginBottom:20}}>
-            {[100,200,500,1000].filter(v=>v<=maxBet+200).map(v=>(
+            {[100,200,500,1000].filter(v=>v<=Math.max(maxBet,200)).map(v=>(
               <button key={v} onClick={()=>setBet(v)} style={{
                 flex:1,padding:"8px 0",borderRadius:8,cursor:"pointer",fontFamily:G.font,fontSize:12,
                 border:`1px solid ${bet===v?"#38bdf855":"#ffffff10"}`,
@@ -1428,6 +1431,103 @@ function ListItemModal({ item, onList, onClose }) {
   );
 }
 
+// ── OPTIONS MODAL ──
+function OptionsModal({ asset, price, maxCash, onBuy, onClose, hist }) {
+  const [type, setType] = useState("call");
+  const [qty,  setQty]  = useState(1);
+  const [preset, setPreset] = useState(0);
+  const strikeCall = price * 1.12, strikePut = price * 0.88;
+  const strike = type === "call" ? strikeCall : strikePut;
+  const premPerUnit = Math.max(1, Math.round(price * 0.04));
+  const maxQty = Math.max(1, Math.floor(maxCash / premPerUnit));
+  const opts = [1, Math.max(1,Math.floor(maxQty*0.25)), Math.max(1,Math.floor(maxQty*0.5)), maxQty];
+  useEffect(() => {
+    if (preset === null) return;
+    setQty(Math.max(1, Math.min(opts[preset], maxQty)));
+  }, [maxQty, preset, type]);
+  const totalPrem = premPerUnit * qty;
+  const canBuy = totalPrem <= maxCash && maxQty >= 1;
+  const exProfit = type==="call"
+    ? Math.max(0,(price*1.25 - strike)*qty)
+    : Math.max(0,(strike - price*0.75)*qty);
+  return (
+    <Modal onClose={onClose} title={`📋 Options: ${asset.emoji} ${asset.name}`}>
+      <PriceChart hist={hist} color={asset.color} asset={asset}/>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:14}}>
+        {[{k:"call",l:"📈 CALL",d:"คาดราคาจะขึ้น",c:"#4ade80"},{k:"put",l:"📉 PUT",d:"คาดราคาจะลง",c:"#f87171"}].map(({k,l,d,c})=>(
+          <button key={k} onClick={()=>{setType(k);setPreset(0);}} style={{
+            padding:"13px 8px",borderRadius:10,cursor:"pointer",fontFamily:G.font,textAlign:"center",
+            border:`1px solid ${type===k?c+"55":"#ffffff15"}`,background:type===k?`${c}15`:"#ffffff05",
+            color:type===k?c:"#ffffff44",transition:"all .15s",
+          }}>
+            <div style={{fontSize:22,marginBottom:3}}>{l.split(" ")[0]}</div>
+            <div style={{fontSize:12,fontWeight:700,marginBottom:2}}>{l.split(" ").slice(1).join(" ")}</div>
+            <div style={{fontSize:9,opacity:0.6}}>{d}</div>
+          </button>
+        ))}
+      </div>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:7,marginBottom:14}}>
+        {[
+          {l:"ราคาปัจจุบัน",  v:fmtP(asset,price),  c:asset.color},
+          {l:`Strike (${type==="call"?"+12%":"-12%"})`, v:fmtP(asset,strike), c:type==="call"?"#4ade80":"#f87171"},
+          {l:"หมดอายุใน",    v:"30 วิ",             c:"#fbbf24"},
+        ].map(({l,v,c})=>(
+          <div key={l} style={{textAlign:"center",background:"#ffffff06",borderRadius:8,padding:"8px 4px",border:"1px solid #ffffff0a"}}>
+            <div style={{fontSize:8,color:"#ffffff33",marginBottom:3}}>{l}</div>
+            <div style={{fontSize:12,fontWeight:700,color:c}}>{v}</div>
+          </div>
+        ))}
+      </div>
+      <div style={{padding:"9px 12px",borderRadius:9,marginBottom:14,background:"#fbbf2408",border:"1px solid #fbbf2420",fontSize:9,color:"#fbbf2488",lineHeight:1.8}}>
+        💡 {type==="call"
+          ? `ถ้าราคาถึง ${fmtP(asset,strike)} ภายใน 30 วิ → กำไร = (ราคา − Strike) × จำนวน`
+          : `ถ้าราคาลงถึง ${fmtP(asset,strike)} ภายใน 30 วิ → กำไร = (Strike − ราคา) × จำนวน`}
+        <br/>ถ้าไม่ถึง → เสีย premium ทั้งหมด
+      </div>
+      <Label>จำนวน (Premium ฿{premPerUnit.toLocaleString()}/ชิ้น)</Label>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr",gap:6,marginBottom:10}}>
+        {opts.map((n,i)=>(
+          <button key={i} onClick={()=>{setPreset(i);setQty(Math.max(1,n));}} style={{
+            padding:"9px 0",borderRadius:8,cursor:"pointer",fontFamily:G.font,
+            border:`1px solid ${preset===i?"#fbbf2455":"#ffffff10"}`,
+            background:preset===i?"#fbbf2412":"#ffffff05",
+            color:preset===i?"#fbbf24":"#ffffff33",fontSize:11,fontWeight:700,transition:"all .15s",
+          }}>{"1 25% 50% Max".split(" ")[i]}</button>
+        ))}
+      </div>
+      <div style={{marginBottom:14}}>
+        <input type="range" min={1} max={Math.max(1,maxQty)} value={qty}
+          onChange={e=>{setPreset(null);setQty(parseInt(e.target.value));}}
+          style={{width:"100%",accentColor:"#fbbf24",cursor:"pointer"}}/>
+        <div style={{display:"flex",justifyContent:"space-between",marginTop:4}}>
+          <span style={{color:"#ffffff28",fontSize:9}}>1</span>
+          <span style={{color:"#fbbf24",fontWeight:700,fontSize:13}}>{qty} contracts</span>
+          <span style={{color:"#ffffff28",fontSize:9}}>{maxQty}</span>
+        </div>
+      </div>
+      <div style={{padding:"10px 14px",borderRadius:9,marginBottom:14,
+        background:type==="call"?"#4ade8010":"#f8717110",border:`1px solid ${type==="call"?"#4ade8025":"#f8717125"}`,
+        display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+        <div>
+          <div style={{fontSize:9,color:"#ffffff33",marginBottom:1}}>Premium รวม (เสียแน่นอน)</div>
+          <div style={{fontSize:16,fontWeight:900,color:"#fbbf24"}}>฿{totalPrem.toLocaleString()}</div>
+        </div>
+        <div style={{textAlign:"right"}}>
+          <div style={{fontSize:9,color:"#ffffff33",marginBottom:1}}>ถ้าราคา{type==="call"?"+25%":"-25%"} (~ตัวอย่าง)</div>
+          <div style={{fontSize:14,fontWeight:700,color:type==="call"?"#4ade80":"#f87171"}}>~+{fmt(exProfit)}</div>
+        </div>
+      </div>
+      <button onClick={()=>canBuy&&onBuy({type,strike,qty,premium:totalPrem,assetId:asset.id})} disabled={!canBuy} style={{
+        width:"100%",padding:14,borderRadius:10,border:"none",
+        background:canBuy?`linear-gradient(135deg,${type==="call"?"#14532d,#166534":"#7f1d1d,#991b1b"})`:"#ffffff05",
+        color:canBuy?(type==="call"?"#4ade80":"#f87171"):"#ffffff15",
+        cursor:canBuy?"pointer":"not-allowed",fontSize:14,fontWeight:900,fontFamily:G.font,
+        boxShadow:canBuy?`0 4px 16px ${type==="call"?"#14532d":"#7f1d1d"}55`:"none",
+      }}>{type==="call"?"📈":"📉"} ซื้อ {qty} Options (−฿{totalPrem.toLocaleString()})</button>
+    </Modal>
+  );
+}
+
 // ── RESULT SCREEN ──
 function ResultScreen({ result, session, onRestart }) {
   const { myNW, cash, stockVal, cryptoVal, realVal, goldVal=0, commVal=0, gWin, gLoss, bots, winner } = result;
@@ -1562,6 +1662,19 @@ function GameScreen({ session, initPlayers, client, onEnd }) {
   const [listModal,  setListModal] = useState(null);
   const [board,      setBoard]      = useState([]);
   const onlineRef = useRef(!!(client?.ok));
+
+  // ── OPTIONS ──
+  const optionsR = useRef([]); // [{id,type,assetId,assetName,assetEmoji,strike,qty,expiry,openPrice}]
+  const [options, setOptions] = useState([]);
+
+  // ── HORSE RACE ──
+  const raceR = useRef({phase:"idle",countdown:90,assets:[],startPrices:{},bet:null,betAsset:null,bettingTick:15,raceTick:30,winner:null,won:false});
+  const [race, setRace] = useState(null);
+
+  // ── MONOPOLY AUCTION ──
+  const auctionR = useRef({phase:"idle",countdown:130,asset:null,currentBid:500,currentBidder:null,window:0,ownerNick:null,ownerExpiry:0});
+  const [auction, setAuction] = useState(null);
+  const [bidInput, setBidInput] = useState(500);
 
   // ── NEW: flash / ticker / trade history / confetti ──
   const [flashMap,      setFlashMap]     = useState({});
@@ -1713,7 +1826,7 @@ function GameScreen({ session, initPlayers, client, onEnd }) {
 
   // ── KEYBOARD SHORTCUTS ──
   useEffect(() => {
-    const TABS = ['market','portfolio','hype','gamble','rank','chat','history'];
+    const TABS = ['market','portfolio','hype','gamble','rank','history','chat','guide'];
     const handler = (e) => {
       if (e.target.tagName==="INPUT"||e.target.tagName==="TEXTAREA") return;
       if (modal) { if (e.key==="Escape") setModal(null); return; }
@@ -2052,7 +2165,7 @@ function GameScreen({ session, initPlayers, client, onEnd }) {
       // Hype index: mean-revert to 1.05 (ตลาดปกติเหนือทุน)
       if(tickR.current % 4 === 0){
         ['card','figure','gameid'].forEach(t=>{
-          const pull=(1.05 - hypeIdxR.current[t])*0.04; // ดึงกลับสู่ 0.62
+          const pull=(1.05 - hypeIdxR.current[t])*0.04; // mean-revert to 1.05
           const noise=(Math.random()-0.5)*0.28;
           hypeIdxR.current[t]=Math.max(0.25,Math.min(5.5,hypeIdxR.current[t]+pull+noise));
         });
@@ -2079,6 +2192,135 @@ function GameScreen({ session, initPlayers, client, onEnd }) {
         hypeIdxR.current[hev.t]=Math.min(6.0,Math.max(0.15,hypeIdxR.current[hev.t]*hev.mult));
         setHypeIdx({...hypeIdxR.current});
         showNotif(hev.msg,"#c084fc");
+      }
+
+      // ── OPTIONS EXPIRY CHECK ──
+      if (optionsR.current.length > 0) {
+        const remaining = [];
+        optionsR.current.forEach(opt => {
+          opt.expiry--;
+          if (opt.expiry <= 0) {
+            const p = priceR.current[opt.assetId] || 0;
+            const won = opt.type === 'call' ? p >= opt.strike : p <= opt.strike;
+            if (won) {
+              const profit = opt.type === 'call' ? (p - opt.strike) * opt.qty : (opt.strike - p) * opt.qty;
+              cashR.current += Math.round(profit); syncCash();
+              showNotif(`📋 ${opt.type==="call"?"📈":"📉"} ${opt.assetEmoji}${opt.assetName} ชนะ! +${fmt(profit)}`, "#4ade80");
+              _snd.play('jackpot');
+            } else {
+              showNotif(`📋 Option ${opt.assetEmoji}${opt.assetName} หมดอายุ — premium หายไปแล้ว`, "#f87171");
+            }
+          } else {
+            remaining.push(opt);
+          }
+        });
+        optionsR.current = remaining;
+        setOptions([...remaining]);
+      }
+
+      // ── HORSE RACE STATE MACHINE ──
+      {
+        const rs = raceR.current;
+        if (rs.phase === 'idle') {
+          rs.countdown--;
+          if (rs.countdown <= 0) {
+            const shuffled = [...gameAssets].sort(()=>Math.random()-0.5).slice(0,5);
+            rs.assets = shuffled; rs.phase = 'betting'; rs.bettingTick = 15;
+            rs.bet = null; rs.betAsset = null; rs.winner = null;
+            setRace({...rs});
+            showNotif("🏇 RACE! เดิมพัน asset ที่ขึ้นเยอะสุด — มี 15 วิ!", "#fbbf24");
+            _snd.play('event');
+          }
+        } else if (rs.phase === 'betting') {
+          rs.bettingTick--;
+          if (rs.bettingTick <= 0) {
+            const sp = {}; rs.assets.forEach(a=>{ sp[a.id]=priceR.current[a.id]||a.bp; });
+            rs.startPrices = sp; rs.phase = 'racing'; rs.raceTick = 30;
+          }
+          setRace({...rs});
+        } else if (rs.phase === 'racing') {
+          rs.raceTick--;
+          if (rs.raceTick <= 0) {
+            let best = null, bestGain = -Infinity;
+            rs.assets.forEach(a=>{
+              const g = ((priceR.current[a.id]||a.bp) - (rs.startPrices[a.id]||a.bp)) / (rs.startPrices[a.id]||a.bp);
+              if (g > bestGain) { bestGain = g; best = a; }
+            });
+            rs.winner = best; rs.phase = 'result';
+            const won = rs.betAsset && best && rs.betAsset.id === best.id;
+            rs.won = won;
+            if (rs.bet && rs.betAsset) {
+              if (won) {
+                const pay = rs.bet * 4; cashR.current += pay; syncCash();
+                showNotif(`🏆 ${rs.betAsset.name} ชนะ! +${fmt(pay)} (×4)`, "#fbbf24");
+                _snd.play('jackpot'); setConfetti(true); setTimeout(()=>setConfetti(false),3000);
+              } else {
+                showNotif(`💔 ${best?.name} ชนะ ไม่ใช่ ${rs.betAsset.name} — เสีย ${fmt(rs.bet)}`, "#f87171");
+              }
+            } else {
+              showNotif(`🏁 Race จบ! ${best?.emoji}${best?.name} ชนะ!`, "#94a3b8");
+            }
+            setRace({...rs});
+            setTimeout(()=>{ raceR.current.phase='idle'; raceR.current.countdown=90+Math.floor(Math.random()*30); setRace(null); }, 5000);
+          } else {
+            setRace({...rs});
+          }
+        }
+      }
+
+      // ── MONOPOLY AUCTION STATE MACHINE ──
+      {
+        const as = auctionR.current;
+        if (as.phase === 'idle') {
+          as.countdown--;
+          if (as.countdown <= 0) {
+            const a = gameAssets[Math.floor(Math.random()*gameAssets.length)];
+            as.asset = a; as.phase = 'bidding'; as.window = 20;
+            as.currentBid = Math.round((priceR.current[a.id]||a.bp)*0.15)||300;
+            as.currentBidder = null;
+            setAuction({...as}); setBidInput(as.currentBid+200);
+            showNotif(`🔨 AUCTION! สิทธิ์ผูกขาด ${a.emoji}${a.name} — ประมูล 20 วิ!`, "#c084fc");
+            _snd.play('event');
+          }
+        } else if (as.phase === 'bidding') {
+          as.window--;
+          // Bot bids (~8% chance per tick)
+          if (Math.random() < 0.08 && botsR.current.length > 0) {
+            const bot = botsR.current[Math.floor(Math.random()*botsR.current.length)];
+            const botBid = as.currentBid + Math.floor(Math.random()*300)+100;
+            if (bot.cash >= botBid && (as.currentBidder !== "player" || Math.random()<0.4)) {
+              as.currentBid = botBid; as.currentBidder = bot.nick||bot.name;
+            }
+          }
+          if (as.window <= 0) {
+            if (!as.currentBidder) {
+              showNotif("🔨 ประมูลจบ — ไม่มีผู้ชนะ","#ffffff44");
+              as.phase='idle'; as.countdown=120+Math.floor(Math.random()*60); setAuction(null);
+            } else if (as.currentBidder === "player") {
+              as.phase='owned'; as.ownerNick=session.nick; as.ownerExpiry=60;
+              showNotif(`👑 คุณชนะ! ผูกขาด ${as.asset.emoji}${as.asset.name} 60 วิ เก็บค่าผ่านทาง!`, "#c084fc");
+              _snd.play('jackpot'); setAuction({...as});
+            } else {
+              as.phase='owned'; as.ownerNick=as.currentBidder; as.ownerExpiry=60;
+              showNotif(`${as.currentBidder} ชนะประมูล ${as.asset.emoji}${as.asset.name}`, "#ffffff44");
+              setAuction({...as});
+            }
+          } else { setAuction({...as}); }
+        } else if (as.phase === 'owned') {
+          as.ownerExpiry--;
+          if (as.ownerExpiry <= 0) {
+            showNotif(`${as.asset.emoji} สิทธิ์ผูกขาดหมดอายุ`, "#ffffff44");
+            as.phase='idle'; as.countdown=120+Math.floor(Math.random()*60); setAuction(null);
+          } else {
+            // Player owner: passive toll every 5 ticks from bot activity
+            if (as.ownerNick === session.nick && tickR.current % 5 === 0) {
+              const toll = Math.max(10, Math.round((priceR.current[as.asset.id]||as.asset.bp)*0.018));
+              cashR.current += toll; syncCash();
+              if (tickR.current % 15 === 0) showNotif(`👑 ค่าผ่านทาง ${as.asset.emoji} +${fmt(toll)}`, "#c084fc");
+            }
+            setAuction({...as});
+          }
+        }
       }
 
       // NPC marketplace buyers (every 10 ticks) — เงินมาจากระบบ ไม่หักจากผู้เล่นหรือ bot คนไหน
@@ -2222,6 +2464,48 @@ function GameScreen({ session, initPlayers, client, onEnd }) {
     setModal(null);
   };
 
+  const doOption = (optData) => {
+    const { type, strike, qty, premium, assetId } = optData;
+    if (cashR.current < premium) { showNotif("❌ เงินไม่พอซื้อ Options","#f87171"); return; }
+    cashR.current -= premium; syncCash();
+    const opt = {
+      id: `opt${Date.now()}`, type, assetId,
+      assetName: selAsset?.name||assetId, assetEmoji: selAsset?.emoji||"",
+      strike, qty, expiry: 30, openPrice: priceR.current[assetId]||strike,
+    };
+    optionsR.current = [...optionsR.current, opt];
+    setOptions([...optionsR.current]);
+    _snd.play('buy');
+    showNotif(`📋 ${type==="call"?"📈 CALL":"📉 PUT"} ${selAsset?.name} ×${qty} (−฿${premium.toLocaleString()})`, "#fbbf24");
+    setModal(null);
+  };
+
+  const doRaceBet = (asset, amount) => {
+    const rState = raceR.current;
+    if (rState.phase !== 'betting') return;
+    if (cashR.current < amount) { showNotif("❌ เงินไม่พอ","#f87171"); return; }
+    if (rState.bet) cashR.current += rState.bet; // refund previous
+    cashR.current -= amount; syncCash();
+    raceR.current.bet = amount;
+    raceR.current.betAsset = asset;
+    setRace({...raceR.current});
+    showNotif(`🏇 เดิมพัน ฿${amount.toLocaleString()} → ${asset.emoji}${asset.name}`, "#fbbf24");
+  };
+
+  const doBid = (amount) => {
+    const aState = auctionR.current;
+    if (!aState || aState.phase !== 'bidding') return;
+    if (amount <= aState.currentBid) { showNotif(`❌ ต้อง Bid มากกว่า ฿${aState.currentBid.toLocaleString()}`,"#f87171"); return; }
+    if (cashR.current < amount) { showNotif("❌ เงินไม่พอ","#f87171"); return; }
+    if (aState.currentBidder === "player") cashR.current += aState.currentBid; // refund my prev bid
+    cashR.current -= amount; syncCash();
+    auctionR.current.currentBid = amount;
+    auctionR.current.currentBidder = "player";
+    setAuction({...auctionR.current});
+    setBidInput(amount + 200);
+    showNotif(`🔨 Bid ฿${amount.toLocaleString()} — คุณนำอยู่!`, "#c084fc");
+  };
+
   const openGamble = (id, cost) => {
     if (cashR.current < cost) { showNotif(`❌ ต้องการ ${fmt(cost)}`,"#f87171"); return; }
     if (onlineRef.current && client?.ok) {
@@ -2298,8 +2582,8 @@ function GameScreen({ session, initPlayers, client, onEnd }) {
 
 const allP = (onlineRef.current && board.length > 0)
   ? board.map(p=>({...p, nw:p.nw||0, isMe:p.nick===session.nick})).sort((a,b)=>b.nw-a.nw)
-  : [{id:"me", name:session.nick, nw:displayNW, isMe:true},
-     ...botsR.current.map(b=>({id:b.id, name:b.name, nw:b.nw}))
+  : [{id:"me", nick:session.nick, name:session.nick, nw:displayNW, isMe:true},
+     ...botsR.current.map(b=>({id:b.id, nick:b.nick||b.name, name:b.nick||b.name, nw:b.nw}))
     ].sort((a,b)=>b.nw-a.nw);
 const myRank = allP.findIndex(p=>p.isMe)+1;
 
@@ -2412,6 +2696,110 @@ const myRank = allP.findIndex(p=>p.isMe)+1;
         </div>
       )}
 
+      {/* ── HORSE RACE BANNER ── */}
+      {race && (
+        <div style={{margin:"5px 14px",padding:"10px 14px",borderRadius:11,
+          background:"linear-gradient(135deg,#78350f12,#fbbf2408)",border:"1px solid #fbbf2830",
+          animation:"event-banner-in 0.4s cubic-bezier(0.34,1.56,0.64,1)"}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
+            <div>
+              <div style={{fontSize:8,letterSpacing:3,color:"#fbbf2466",marginBottom:1}}>🏇 HORSE RACE</div>
+              <div style={{color:"#fbbf24",fontWeight:700,fontSize:12}}>
+                {race.phase==='betting'?`เลือก asset เดิมพัน! (${race.bettingTick}s)`:race.phase==='racing'?`กำลังแข่ง... (${race.raceTick}s)`:`🏁 จบแล้ว! ชนะ: ${race.winner?.emoji}${race.winner?.name}`}
+              </div>
+            </div>
+            {race.phase==='betting'&&(
+              <div style={{fontSize:9,color:race.betAsset?"#4ade80":"#ffffff33"}}>
+                {race.betAsset?`✓ ${race.betAsset.emoji}${race.betAsset.name} ฿${race.bet?.toLocaleString()}`:"ยังไม่ได้เดิมพัน"}
+              </div>
+            )}
+            {race.phase==='result'&&<div style={{fontSize:18}}>{race.won?"🏆":"💔"}</div>}
+          </div>
+          {race.phase==='betting' && (
+            <div>
+              <div style={{display:"flex",gap:4,flexWrap:"wrap",marginBottom:6}}>
+                {race.assets.map(a=>{
+                  const isBet = race.betAsset?.id===a.id;
+                  return (
+                    <button key={a.id} onClick={()=>doRaceBet(a, Math.min(500, cashR.current))} style={{
+                      padding:"5px 9px",borderRadius:7,cursor:"pointer",fontFamily:G.font,
+                      border:`1px solid ${isBet?"#fbbf2455":"#ffffff15"}`,
+                      background:isBet?"#fbbf2415":"#ffffff06",
+                      color:isBet?"#fbbf24":"#ffffff55",fontSize:10,fontWeight:700,
+                    }}>{a.emoji} {a.name}</button>
+                  );
+                })}
+              </div>
+              <div style={{display:"flex",gap:4}}>
+                {[100,300,500,1000].filter(v=>v<=cashR.current).map(v=>(
+                  <button key={v} onClick={()=>race.betAsset&&doRaceBet(race.betAsset,v)} style={{
+                    padding:"4px 8px",borderRadius:6,cursor:"pointer",fontFamily:G.font,fontSize:9,fontWeight:700,
+                    border:`1px solid ${race.bet===v?"#fbbf2455":"#ffffff10"}`,
+                    background:race.bet===v?"#fbbf2412":"transparent",color:race.bet===v?"#fbbf24":"#ffffff33",
+                  }}>฿{v}</button>
+                ))}
+              </div>
+            </div>
+          )}
+          {race.phase==='racing' && (
+            <div style={{display:"flex",gap:5,flexWrap:"wrap"}}>
+              {race.assets.map(a=>{
+                const sp = race.startPrices[a.id]||a.bp;
+                const cp = priceR.current[a.id]||a.bp;
+                const pct = ((cp-sp)/sp*100).toFixed(1);
+                const up = cp >= sp;
+                const isBet = race.betAsset?.id===a.id;
+                return (
+                  <div key={a.id} style={{padding:"4px 8px",borderRadius:7,background:isBet?"#fbbf2415":"#ffffff06",border:`1px solid ${isBet?"#fbbf2430":"#ffffff10"}`,fontSize:9}}>
+                    {a.emoji} <span style={{color:up?"#4ade80":"#f87171"}}>{up?"+":""}{pct}%</span>
+                    {isBet&&<span style={{color:"#fbbf24"}}> ★</span>}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── AUCTION BANNER ── */}
+      {auction && (
+        <div style={{margin:"5px 14px",padding:"10px 14px",borderRadius:11,
+          background:"linear-gradient(135deg,#4c1d9512,#c084fc08)",border:"1px solid #c084fc30",
+          animation:"event-banner-in 0.4s cubic-bezier(0.34,1.56,0.64,1)"}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
+            <div>
+              <div style={{fontSize:8,letterSpacing:3,color:"#c084fc66",marginBottom:1}}>🔨 MONOPOLY AUCTION</div>
+              <div style={{color:"#c084fc",fontWeight:700,fontSize:12}}>
+                {auction.asset?.emoji}{auction.asset?.name}
+                {auction.phase==='bidding'?` — ประมูล (${auction.window}s)`:` — ผู้ครอง ${auction.window||auction.ownerExpiry}s`}
+              </div>
+            </div>
+            <div style={{textAlign:"right"}}>
+              {auction.phase==='bidding'&&<div style={{fontSize:11,fontWeight:700,color:auction.currentBidder==="player"?"#4ade80":"#f87171"}}>
+                ฿{auction.currentBid.toLocaleString()} {auction.currentBidder==="player"?"(คุณ)":auction.currentBidder?`(${auction.currentBidder})`:"(ไม่มี)"}
+              </div>}
+              {auction.phase==='owned'&&<div style={{fontSize:10,color:auction.ownerNick===session.nick?"#c084fc":"#ffffff44"}}>
+                👑 {auction.ownerNick===session.nick?"คุณ!":auction.ownerNick}
+              </div>}
+            </div>
+          </div>
+          {auction.phase==='bidding' && (
+            <div style={{display:"flex",gap:5,alignItems:"center",flexWrap:"wrap"}}>
+              {[auction.currentBid+200,auction.currentBid+500,auction.currentBid+1000].filter(v=>v<=cashR.current+(auction.currentBidder==="player"?auction.currentBid:0)).map(v=>(
+                <button key={v} onClick={()=>doBid(v)} style={{
+                  padding:"5px 9px",borderRadius:7,cursor:"pointer",fontFamily:G.font,fontSize:10,fontWeight:700,
+                  border:"1px solid #c084fc33",background:"#c084fc10",color:"#c084fc",
+                }}>Bid ฿{v.toLocaleString()}</button>
+              ))}
+              {auction.currentBidder!=="player"&&<span style={{fontSize:9,color:"#ffffff33"}}>หรือพิมพ์จำนวน</span>}
+            </div>
+          )}
+          {auction.phase==='owned'&&auction.ownerNick===session.nick&&(
+            <div style={{fontSize:9,color:"#c084fc88",marginTop:4}}>👑 เก็บค่าผ่านทางอัตโนมัติทุก 5 วิ · เหลือ {auction.ownerExpiry}s</div>
+          )}
+        </div>
+      )}
+
       {notif && (
         <div key={notif.id} style={{position:"fixed",top:74,left:"50%",transform:"translateX(-50%)",padding:"9px 20px",borderRadius:24,zIndex:999,
           background:`${notif.color}15`,border:`1px solid ${notif.color}40`,color:notif.color,fontSize:12,fontWeight:700,
@@ -2449,6 +2837,7 @@ const myRank = allP.findIndex(p=>p.isMe)+1;
           {k:"rank",      l:"🏆 Rank"},
           {k:"history",   l:`📋 ประวัติ${tradeHistory.length>0?` ${tradeHistory.length}`:""}`},
           {k:"chat",      l:`💬 แชท${chatMsgs.length>0?" ·":""}`},
+          {k:"guide",     l:"❓ คู่มือ"},
         ].map(({k,l})=>(
           <button key={k} onClick={()=>setTab(k)} style={{
             padding:"6px 9px",borderRadius:"8px 8px 0 0",cursor:"pointer",fontFamily:G.font,fontSize:9,fontWeight:700,flexShrink:0,
@@ -2512,14 +2901,15 @@ const myRank = allP.findIndex(p=>p.isMe)+1;
                     </span>
                   </div>
                 )}
-                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:7}}>
+                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:7}}>
                   <button onClick={()=>setModal("buy")} style={{padding:"11px 0",borderRadius:10,border:"1px solid #4ade8055",background:"#4ade8012",color:"#4ade80",cursor:"pointer",fontSize:12,fontWeight:900,fontFamily:G.font,boxShadow:"0 2px 8px #4ade8010"}}>▲ ซื้อ</button>
                   <button onClick={()=>selHave>0&&setModal("sell")} disabled={selHave===0} style={{padding:"11px 0",borderRadius:10,border:`1px solid ${selHave>0?"#f8717155":"#ffffff10"}`,background:selHave>0?"#f8717112":"#ffffff05",color:selHave>0?"#f87171":"#ffffff25",cursor:selHave>0?"pointer":"not-allowed",fontSize:12,fontWeight:900,fontFamily:G.font,boxShadow:selHave>0?"0 2px 8px #f8717110":"none"}}>▼ ขาย</button>
                   {short[selAsset?.id] ? (
-                    <button onClick={()=>setModal("cover")} style={{padding:"11px 0",borderRadius:10,border:"1px solid #4ade8055",background:"#4ade8012",color:"#4ade80",cursor:"pointer",fontSize:12,fontWeight:900,fontFamily:G.font,boxShadow:"0 2px 8px #4ade8010"}}>↑ Cover</button>
+                    <button onClick={()=>setModal("cover")} style={{padding:"11px 0",borderRadius:10,border:"1px solid #4ade8055",background:"#4ade8012",color:"#4ade80",cursor:"pointer",fontSize:12,fontWeight:900,fontFamily:G.font,boxShadow:"0 2px 8px #4ade8010"}}>↑ Cover Short</button>
                   ) : (
                     <button onClick={()=>setModal("short")} style={{padding:"11px 0",borderRadius:10,border:"1px solid #f8717155",background:"#f8717112",color:"#f87171",cursor:"pointer",fontSize:12,fontWeight:900,fontFamily:G.font,boxShadow:"0 2px 8px #f8717110"}}>⬇ Short</button>
                   )}
+                  <button onClick={()=>setModal("options")} style={{padding:"11px 0",borderRadius:10,border:"1px solid #fbbf2455",background:"#fbbf2412",color:"#fbbf24",cursor:"pointer",fontSize:12,fontWeight:900,fontFamily:G.font,boxShadow:"0 2px 8px #fbbf2410",gridColumn:"span 2"}}>📋 Options Contract{options.filter(o=>o.assetId===selAsset?.id).length>0?` (${options.filter(o=>o.assetId===selAsset?.id).length} active)`:""}</button>
                 </div>
               </div>
             )}
@@ -2656,10 +3046,40 @@ const myRank = allP.findIndex(p=>p.isMe)+1;
                       </div>
                       <div style={{textAlign:"right"}}>
                         <div style={{fontSize:13,fontWeight:700,color:pnl>=0?"#4ade80":"#f87171"}}>{pnl>=0?"+":""}{fmt(pnl)}</div>
-                        <button onClick={()=>{setSelAsset(a);setTab("market");setModal("cover");}} style={{
+                        <button onClick={()=>{setSelAsset(a);setModal("cover");}} style={{
                           marginTop:4,padding:"4px 8px",borderRadius:6,fontSize:9,fontFamily:G.font,fontWeight:700,cursor:"pointer",
                           border:"1px solid #4ade8033",background:"#4ade8010",color:"#4ade80",
                         }}>↑ Cover</button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {options.length > 0 && (
+              <div style={{marginBottom:12}}>
+                <div style={{fontSize:9,letterSpacing:3,color:"#fbbf2455",marginBottom:8}}>📋 OPTIONS ACTIVE ({options.length})</div>
+                {options.map(opt=>{
+                  const cp = prices[opt.assetId]||0;
+                  const inMoney = opt.type==="call" ? cp >= opt.strike : cp <= opt.strike;
+                  return (
+                    <div key={opt.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",
+                      padding:"9px 12px",borderRadius:9,marginBottom:5,
+                      background:inMoney?"#4ade8008":"#ffffff05",
+                      border:`1px solid ${inMoney?"#4ade8025":"#ffffff0a"}`}}>
+                      <div>
+                        <div style={{fontSize:11,fontWeight:700,color:inMoney?"#4ade80":"#fbbf24"}}>
+                          {opt.type==="call"?"📈":"📉"} {opt.assetEmoji}{opt.assetName} ×{opt.qty}
+                        </div>
+                        <div style={{fontSize:8,color:"#ffffff33"}}>
+                          Strike {fmtP(gameAssets.find(a=>a.id===opt.assetId)||{type:"stock"},opt.strike)} · หมดใน {opt.expiry}s · {inMoney?"✅ In-the-money":"⏳ Out-of-money"}
+                        </div>
+                      </div>
+                      <div style={{textAlign:"right"}}>
+                        <div style={{fontSize:10,fontWeight:700,color:inMoney?"#4ade80":"#ffffff33"}}>
+                          {inMoney ? fmt(opt.type==="call"?(cp-opt.strike)*opt.qty:(opt.strike-cp)*opt.qty) : "–"}
+                        </div>
                       </div>
                     </div>
                   );
@@ -2677,17 +3097,33 @@ const myRank = allP.findIndex(p=>p.isMe)+1;
                 const cost = basis[a.id]||0;
                 const pnl = val-cost;
                 return (
-                  <div key={a.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"12px 14px",borderRadius:11,marginBottom:6,background:"#ffffff05",border:"1px solid #ffffff08"}}>
-                    <div style={{display:"flex",alignItems:"center",gap:10}}>
-                      <span style={{fontSize:18}}>{a.emoji}</span>
-                      <div>
-                        <div style={{fontSize:12,fontWeight:700,color:a.color}}>{a.name}</div>
-                        <div style={{fontSize:9,color:"#ffffff33"}}>{q} หน่วย × {fmtP(a,p)}</div>
+                  <div key={a.id} style={{padding:"12px 14px",borderRadius:11,marginBottom:6,background:"#ffffff05",border:"1px solid #ffffff08"}}>
+                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
+                      <div style={{display:"flex",alignItems:"center",gap:10}}>
+                        <span style={{fontSize:18}}>{a.emoji}</span>
+                        <div>
+                          <div style={{fontSize:12,fontWeight:700,color:a.color}}>{a.name}</div>
+                          <div style={{fontSize:9,color:"#ffffff33"}}>{q} หน่วย × {fmtP(a,p)}</div>
+                        </div>
+                      </div>
+                      <div style={{textAlign:"right"}}>
+                        <div style={{fontSize:13,fontWeight:700,color:"#fff"}}>{fmt(val)}</div>
+                        <div style={{fontSize:9,color:pnl>=0?"#4ade80":"#f87171"}}>{pnl>=0?"+":""}{fmt(pnl)}</div>
                       </div>
                     </div>
-                    <div style={{textAlign:"right"}}>
-                      <div style={{fontSize:13,fontWeight:700,color:"#fff"}}>{fmt(val)}</div>
-                      <div style={{fontSize:9,color:pnl>=0?"#4ade80":"#f87171"}}>{pnl>=0?"+":""}{fmt(pnl)}</div>
+                    <div style={{display:"flex",gap:6}}>
+                      <button onClick={()=>{setSelAsset(a);setModal("buy");}} style={{
+                        flex:1,padding:"5px 0",borderRadius:7,fontSize:10,fontFamily:G.font,fontWeight:700,cursor:"pointer",
+                        border:"1px solid #4ade8033",background:"#4ade8010",color:"#4ade80",
+                      }}>▲ ซื้อเพิ่ม</button>
+                      <button onClick={()=>{setSelAsset(a);setModal("sell");}} style={{
+                        flex:1,padding:"5px 0",borderRadius:7,fontSize:10,fontFamily:G.font,fontWeight:700,cursor:"pointer",
+                        border:"1px solid #f8717133",background:"#f8717110",color:"#f87171",
+                      }}>▼ ขาย</button>
+                      <button onClick={()=>{setSelAsset(a);setModal("options");}} style={{
+                        flex:1,padding:"5px 0",borderRadius:7,fontSize:10,fontFamily:G.font,fontWeight:700,cursor:"pointer",
+                        border:"1px solid #fbbf2433",background:"#fbbf2410",color:"#fbbf24",
+                      }}>📋 Options</button>
                     </div>
                   </div>
                 );
@@ -2959,6 +3395,170 @@ const myRank = allP.findIndex(p=>p.isMe)+1;
             </div>
           </div>
         )}
+        {/* GUIDE TAB */}
+        {tab==="guide" && (() => {
+          const GH = ({children,color="#38bdf8"}) => (
+            <div style={{fontSize:13,fontWeight:700,color,marginBottom:8,marginTop:16,borderBottom:`1px solid ${color}22`,paddingBottom:5}}>
+              {children}
+            </div>
+          );
+          const GT = ({rows,cols}) => (
+            <div style={{borderRadius:10,overflow:"hidden",border:"1px solid #ffffff0a",marginBottom:12}}>
+              <div style={{display:"grid",gridTemplateColumns:`repeat(${cols.length},1fr)`,background:"#ffffff08"}}>
+                {cols.map(c=><div key={c} style={{padding:"6px 10px",fontSize:8,fontWeight:700,color:"#ffffff44",letterSpacing:1}}>{c}</div>)}
+              </div>
+              {rows.map((row,ri)=>(
+                <div key={ri} style={{display:"grid",gridTemplateColumns:`repeat(${cols.length},1fr)`,background:ri%2===0?"#ffffff03":"transparent",borderTop:"1px solid #ffffff06"}}>
+                  {row.map((cell,ci)=><div key={ci} style={{padding:"7px 10px",fontSize:10,color:"#e2e8f0",lineHeight:1.4}}>{cell}</div>)}
+                </div>
+              ))}
+            </div>
+          );
+          const Tip = ({children,color="#fbbf24"}) => (
+            <div style={{padding:"8px 12px",borderRadius:8,background:`${color}08`,border:`1px solid ${color}20`,fontSize:10,color:`${color}cc`,lineHeight:1.6,marginBottom:8}}>
+              💡 {children}
+            </div>
+          );
+          return (
+            <div style={{paddingBottom:20}}>
+              <div style={{textAlign:"center",padding:"10px 0 4px",marginBottom:4}}>
+                <div style={{fontSize:14,fontWeight:700,color:"#fff"}}>❓ คู่มือการเล่น Market Wars</div>
+                <div style={{fontSize:9,color:"#ffffff33",marginTop:3}}>แตะหัวข้อเพื่อข้ามไป</div>
+              </div>
+
+              <GH color="#fbbf24">🎯 เป้าหมายเกม</GH>
+              <GT cols={["โหมด","เงื่อนไขชนะ","เวลา","ทุนเริ่ม"]} rows={[
+                ["⚡ Casual","Net Worth สูงสุดเมื่อหมดเวลา","5 นาที","฿20,000"],
+                ["🧠 Deep","Net Worth ถึงเป้าที่ตั้งไว้","15 นาที","฿20,000"],
+              ]}/>
+              <Tip color="#fbbf24">Net Worth = เงินสด + มูลค่าสินทรัพย์ทั้งหมด − ภาระ Short</Tip>
+
+              <GH color="#38bdf8">📊 ตลาด — ซื้อ/ขาย Asset</GH>
+              <GT cols={["ประเภท","ตัวอย่าง","ผันผวน","Passive Income"]} rows={[
+                ["📈 หุ้น","AAPL, TSLA, NVDA, PTT","ปานกลาง","ไม่มี"],
+                ["🪙 Crypto","BTC, ETH, SOL, DOGE","สูงมาก","ไม่มี"],
+                ["🏠 อสังหาฯ","คอนโด, บ้าน, ห้าง","ต่ำ","✅ ทุก 30 วิ"],
+                ["🥇 ทอง/เงิน","Gold, Silver","ปานกลาง","✅ ทุก 30 วิ"],
+                ["🛢 สินค้า","น้ำมัน, น้ำ, ข้าว","ปานกลาง","✅ ทุก 30 วิ"],
+              ]}/>
+              <Tip>Event ตลาดมีผลต่อ asset แต่ละประเภทต่างกัน — อ่าน Event แล้วซื้อสินทรัพย์ที่ได้ประโยชน์ก่อนเวลาหมด!</Tip>
+
+              <GH color="#f87171">⬇ Short Selling</GH>
+              <GT cols={["ขั้นตอน","รายละเอียด"]} rows={[
+                ["1. Short","กดปุ่ม ⬇ Short — ยืมหุ้นมาขาย รับเงินสดทันที"],
+                ["2. รอ","ถ้าราคาลง = กำไร ถ้าราคาขึ้น = ขาดทุน"],
+                ["3. Cover","กดปุ่ม ↑ Cover เพื่อปิด Position"],
+                ["ค่าธรรมเนียม","0.3% ของมูลค่า Short ทุก 10 วินาที"],
+                ["Force Cover","ราคาขึ้น +50% → ระบบบังคับปิด Short อัตโนมัติ"],
+              ]}/>
+              <Tip color="#f87171">Short เหมาะกับ Crypto ช่วง Crash Event — ทำกำไรได้เร็วมาก แต่เสี่ยงถ้าราคากลับตัว</Tip>
+
+              <GH color="#fbbf24">📋 Options Contract</GH>
+              <GT cols={["ประเภท","ชนะเมื่อ","กำไร","เสียเมื่อ"]} rows={[
+                ["📈 CALL","ราคา ≥ Strike (+12%)","(ราคา − Strike) × จำนวน","ราคาไม่ถึง Strike"],
+                ["📉 PUT","ราคา ≤ Strike (−12%)","(Strike − ราคา) × จำนวน","ราคาไม่ลงถึง Strike"],
+              ]}/>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:7,marginBottom:8}}>
+                {[
+                  {icon:"💰",l:"Premium",d:"จ่าย 4% ของราคา/unit — หายเสมอ"},
+                  {icon:"⏱️",l:"หมดอายุ",d:"30 วินาที นับจากซื้อ"},
+                  {icon:"🎯",l:"Strike",d:"CALL +12% / PUT −12% จากราคาตอนซื้อ"},
+                  {icon:"⚡",l:"กำไร",d:"ไม่จำกัด ขึ้นกับราคาที่เคลื่อน"},
+                ].map(({icon,l,d})=>(
+                  <div key={l} style={{background:"#ffffff05",borderRadius:8,padding:"8px 10px",border:"1px solid #ffffff08"}}>
+                    <div style={{fontSize:9,color:"#ffffff33",marginBottom:2}}>{icon} {l}</div>
+                    <div style={{fontSize:10,color:"#fbbf24"}}>{d}</div>
+                  </div>
+                ))}
+              </div>
+              <Tip>ซื้อ CALL ก่อน "Crypto Bull Run" หรือ "Tech Boom" — Options ทำกำไรได้หลายเท่าของ premium ที่จ่าย!</Tip>
+
+              <GH color="#c084fc">🎴 Hype Market</GH>
+              <GT cols={["กล่อง","ราคาเปิด","Rarity","ขายได้ถึง"]} rows={[
+                ["🃏 การ์ดอนิเมะ","฿200","N → UR (Anime)","฿9,000+"],
+                ["🎎 ฟิกเกอร์","฿800","Standard → GodTier","฿30,000+"],
+                ["🎮 ไอดีเกม","฿400","Basic → Limited","฿15,000+"],
+              ]}/>
+              <GT cols={["Action","วิธี","หมายเหตุ"]} rows={[
+                ["เปิดกล่อง","กด \"เปิดกล่อง\" เลือกประเภท","สุ่ม Rarity ตามน้ำหนัก"],
+                ["ทิ้ง (Instant)","กด \"ทิ้ง\" รับ 82% ของราคาตลาด","ได้เงินทันที แต่โดน cut 18%"],
+                ["ลงขาย","กด \"ลงขาย\" ตั้งราคาเอง","NPC อาจมาซื้อ หรือผู้เล่นคนอื่น"],
+                ["Hype Index","ราคาตลาดเปลี่ยนตาม index","ดู % ปัจจุบันในหน้า Hype"],
+              ]}/>
+              <Tip color="#c084fc">Hype Event ทำให้ index พุ่งหรือดิ่งอย่างรวดเร็ว — ลงขายก่อน crash จะช่วยได้มาก</Tip>
+
+              <GH color="#f87171">🎲 Gamble Mini Games</GH>
+              <GT cols={["เกม","ราคา","กำไรสูงสุด","โอกาสชนะ"]} rows={[
+                ["🎟️ ล็อตเตอรี่","฿100","฿50,000 (Jackpot)","~11%"],
+                ["🃏 Scratch Card","฿50","฿200 (3 ช่อง)","~35%"],
+                ["🚀 Crash","฿200","ไม่จำกัด (จับเวลา)","ขึ้นกับตัวเอง"],
+                ["🪙 เหรียญทาย","฿300","฿600 (×2)","~45%"],
+                ["🎰 รูเล็ต (เลข)","฿150","฿5,250 (×35)","2.6%"],
+              ]}/>
+              <Tip color="#f87171">Crash Game — Cash Out เร็วๆ ที่ ×1.5 ถึง ×2.5 สม่ำเสมอ ดีกว่ารอ ×10 แล้วพลาด</Tip>
+
+              <GH color="#fbbf24">🏇 Horse Race</GH>
+              <div style={{background:"#ffffff05",borderRadius:10,padding:"12px 14px",border:"1px solid #ffffff0a",marginBottom:8}}>
+                {[
+                  {t:"ทุก 90 วิ",d:"Race ใหม่เริ่มต้น — ประกาศ 5 asset เข้าแข่ง"},
+                  {t:"15 วิ",d:"ช่วงเดิมพัน — เลือก asset + จำนวนเงิน"},
+                  {t:"30 วิ",d:"Race เริ่ม — ดูราคาขึ้นลงแบบ real-time"},
+                  {t:"ชนะ",d:"Asset ที่ % ขึ้นมากสุด = ชนะ → ได้ ×4 ของเงินเดิม"},
+                  {t:"แพ้",d:"เสียเงินที่วางไว้ทั้งหมด"},
+                ].map(({t,d})=>(
+                  <div key={t} style={{display:"flex",gap:10,marginBottom:7,alignItems:"flex-start"}}>
+                    <div style={{fontSize:9,fontWeight:700,color:"#fbbf24",minWidth:50,flexShrink:0}}>{t}</div>
+                    <div style={{fontSize:10,color:"#ffffff55"}}>{d}</div>
+                  </div>
+                ))}
+              </div>
+              <Tip>ถ้ามี Event "Crypto Bull Run" กำลัง active อยู่ → BTC/ETH/SOL มักชนะ Race !</Tip>
+
+              <GH color="#c084fc">🔨 Monopoly Auction</GH>
+              <div style={{background:"#ffffff05",borderRadius:10,padding:"12px 14px",border:"1px solid #ffffff0a",marginBottom:8}}>
+                {[
+                  {t:"ทุก 2 นาที",d:"Asset สุ่ม 1 ตัวขึ้นประมูล — ประกาศ 20 วิ"},
+                  {t:"ประมูล",d:"Bid ราคาสูงกว่าคนอื่น — Bot ก็ Bid เหมือนกัน"},
+                  {t:"ชนะ",d:"เงินที่ Bid หายไป แลกกับ 'สิทธิ์ผูกขาด' 60 วิ"},
+                  {t:"ผลตอบแทน",d:"รับค่าผ่านทางอัตโนมัติทุก 5 วิ (~1.8% ของราคา asset)"},
+                  {t:"หมดอายุ",d:"60 วิผ่านไป → สิทธิ์หมด เริ่มนับ auction ใหม่"},
+                ].map(({t,d})=>(
+                  <div key={t} style={{display:"flex",gap:10,marginBottom:7,alignItems:"flex-start"}}>
+                    <div style={{fontSize:9,fontWeight:700,color:"#c084fc",minWidth:60,flexShrink:0}}>{t}</div>
+                    <div style={{fontSize:10,color:"#ffffff55"}}>{d}</div>
+                  </div>
+                ))}
+              </div>
+              <Tip color="#c084fc">ประมูลสิทธิ์ asset ที่ราคาสูง (เช่น MALL, BTC) → ค่าผ่านทางมากขึ้น!</Tip>
+
+              {cfg.cards && <>
+                <GH color="#38bdf8">🃏 Power Cards (Casual Mode)</GH>
+                <GT cols={["ไพ่","ผล","ใช้เมื่อ"]} rows={[
+                  ["❄️ Freeze","หยุดราคาทุก asset 10 วิ","ราคาดีอยู่ ไม่อยากให้เปลี่ยน"],
+                  ["⚡ Squeeze","Crypto พุ่ง +25% ทันที","ก่อนใช้ซื้อ Crypto เยอะๆ ก่อน"],
+                  ["🕵️ Intel","เห็น Event ถัดไปล่วงหน้า 8 วิ","เตรียมพอร์ตก่อนคนอื่น"],
+                  ["📋 Copy","ซื้อตาม portfolio ของ Rank 1","ตอนตามหลังและไม่รู้จะลงทุนไหน"],
+                  ["💣 Sabotage","ราคาทุก asset ผันผวนสุ่ม","ตอนตามหลัง ทำให้ตลาดสับสน"],
+                ]}/>
+              </>}
+
+              <GH color="#fbbf24">💡 Tips สำหรับมือใหม่</GH>
+              {[
+                "ซื้ออสังหาฯ 1-2 ชิ้นตั้งแต่แรก เพราะ Passive Income สะสมทั้งเกม",
+                "ดู Event ก่อนลงทุน — แต่ละ Event บอกชัดว่า asset ไหนจะขึ้น/ลง",
+                "อย่าเก็บเงินสดไว้มากเกินไป เงินที่ไม่ได้ลงทุน = ไม่โต",
+                "Short ช่วง Crash Event = กำไรง่ายมาก แต่ต้อง Cover ก่อน Event จบ",
+                "Options ให้ผลตอบแทนสูง แต่ต้องทายทิศทางถูก — อย่าใช้เงินทั้งหมดซื้อ Options",
+                "Race: ดู Event ที่กำลัง active ก่อนเดิมพัน — อย่าเดิมพัน asset ที่โดน Event ลง",
+              ].map((tip,i)=>(
+                <div key={i} style={{display:"flex",gap:10,marginBottom:7,alignItems:"flex-start",padding:"7px 10px",background:"#ffffff04",borderRadius:8,border:"1px solid #ffffff07"}}>
+                  <div style={{fontSize:11,color:"#fbbf24",flexShrink:0}}>#{i+1}</div>
+                  <div style={{fontSize:10,color:"#ffffff66",lineHeight:1.5}}>{tip}</div>
+                </div>
+              ))}
+            </div>
+          );
+        })()}
       </div>
 
       {/* Bottom Nav Shortcut */}
@@ -2976,6 +3576,7 @@ const myRank = allP.findIndex(p=>p.isMe)+1;
 
       {/* MODALS */}
       {listModal && <ListItemModal item={listModal} onList={(p)=>listItem(listModal,p)} onClose={()=>setListModal(null)}/>}
+      {modal==="options" && selAsset && <OptionsModal asset={selAsset} price={selP} maxCash={cash} onBuy={doOption} onClose={()=>setModal(null)} hist={selHist}/>}
       {modal==="buy"   && selAsset && <BuyModal   asset={selAsset} price={selP} maxCash={cash} onBuy={doBuy} onClose={()=>setModal(null)} hist={selHist}/>}
       {modal==="sell"  && selAsset && <SellModal  asset={selAsset} price={selP} maxQty={selHave} onSell={doSell} onClose={()=>setModal(null)} hist={selHist}/>}
       {modal==="short" && selAsset && <ShortModal asset={selAsset} price={selP} maxCash={cash} onShort={doShort} onClose={()=>setModal(null)} hist={selHist}/>}
@@ -2999,20 +3600,44 @@ function App() {
   const [wsError, setWsError] = useState(null);
   const clientRef = useRef(null);
   const playerIdRef = useRef(null);
+  const pendingJoinRef = useRef(null); // เก็บ JOIN params สำหรับ auto-rejoin
+  const screenRef = useRef("lobby");   // track screen in WS closure (state is stale)
   const handleGameEnd = useCallback((r) => { setResult(r); setScreen("result"); }, []);
 
   // init WS client ครั้งเดียว
   useEffect(() => {
     const client = new MWClient((msg) => {
-      if (msg.type === "CONNECTED")   { setWsReady(true); setWsError(null); }
-      if (msg.type === "OFFLINE")     { setWsReady(false); setWsError("ไม่สามารถเชื่อมต่อ server ได้ — เล่น offline แทน"); }
-      if (msg.type === "DISCONNECTED"){ setWsReady(false); setWsError("หลุดการเชื่อมต่อ กำลัง reconnect..."); }
+      if (msg.type === "CONNECTED") {
+        setWsReady(true); setWsError(null);
+        // auto-rejoin if we lost connection mid-join and server restarted
+        if (pendingJoinRef.current) {
+          const r = pendingJoinRef.current;
+          client.join(r.nick, r.code, r.mode, r.endMode, r.target, r.duration);
+        }
+      }
+      if (msg.type === "OFFLINE") { setWsReady(false); setWsError("ไม่สามารถเชื่อมต่อ server ได้ — เล่น offline แทน"); }
+      if (msg.type === "DISCONNECTED") {
+        setWsReady(false);
+        // if server drops while we're in lobby-join or waiting room, the room is gone
+        if (screenRef.current === "joining" || screenRef.current === "waiting") {
+          pendingJoinRef.current = null;
+          screenRef.current = "lobby";
+          setScreen("lobby");
+          setSession(null);
+          setPlayers([]);
+          setWsError("การเชื่อมต่อขาด — ห้องหลุดแล้ว กรุณาเข้าร่วมใหม่");
+        } else {
+          setWsError("หลุดการเชื่อมต่อ กำลัง reconnect...");
+        }
+      }
 
       if (msg.type === "JOINED") {
+        pendingJoinRef.current = null; // server confirmed — no longer need auto-rejoin
         playerIdRef.current = msg.playerId;
         setSession(s => ({...s, playerId:msg.playerId, isHost:msg.isHost,
           mode:msg.mode, endMode:msg.endMode, target:msg.target, duration:msg.duration}));
         setPlayers(msg.players.map(p=>({...p,isMe:p.id===msg.playerId})));
+        screenRef.current = "waiting";
         setScreen("waiting");
       }
 if (msg.type === "PLAYER_JOINED") {
@@ -3045,12 +3670,15 @@ if (msg.type === "PLAYERS_UPDATE") {
 const handleLobbyStart = (s) => {
   if (ONLINE_MODE && clientRef.current?.ok) {
     setSession(s);
+    pendingJoinRef.current = s; // store for auto-rejoin if connection drops before JOINED
     clientRef.current.join(s.nick, s.code, s.mode, s.endMode, s.target, s.duration);
-    setScreen("waiting");
+    screenRef.current = "joining";
+    setScreen("joining"); // wait for server JOINED confirmation before entering room
   } else {
     // offline: initialize players with the host so WaitingRoom works
     setSession(s);
     setPlayers([{id:"me-offline", nick:s.nick, name:s.nick, ready:true, isMe:true}]);
+    screenRef.current = "waiting";
     setScreen("waiting");
   }
 };
@@ -3072,11 +3700,22 @@ const handleLobbyStart = (s) => {
       <Lobby onStart={handleLobbyStart} wsReady={wsReady||!ONLINE_MODE}/>
     </>
   );
+  if (screen==="joining") return (
+    <div style={{minHeight:"100vh",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",background:"#0f172a",color:"#94a3b8",fontFamily:"'IBM Plex Mono',monospace",gap:0}}>
+      <div style={{fontSize:40,marginBottom:18,display:"inline-block",animation:"spin 1.1s linear infinite"}}>⚙️</div>
+      <div style={{fontSize:17,fontWeight:700,color:"#e2e8f0",marginBottom:8}}>กำลังเข้าร่วมห้อง...</div>
+      <div style={{fontSize:12,opacity:0.55,marginBottom:32}}>รอการยืนยันจาก Server</div>
+      <button onClick={()=>{ pendingJoinRef.current=null; screenRef.current="lobby"; setScreen("lobby"); setSession(null); }}
+        style={{padding:"8px 28px",background:"#1e293b",border:"1px solid #334155",borderRadius:8,color:"#94a3b8",cursor:"pointer",fontSize:13,fontFamily:"inherit"}}>
+        ยกเลิก
+      </button>
+    </div>
+  );
   if (screen==="waiting") return (
-<WaitingRoom session={session} client={clientRef.current} players={players} setPlayers={setPlayers} onGo={ps=>{ setPlayers(ps); setScreen("game"); }}/>
+<WaitingRoom session={session} client={clientRef.current} players={players} setPlayers={setPlayers} onGo={(ps, forceOffline)=>{ setPlayers(ps); if(forceOffline) setSession(s=>({...s,_offline:true})); screenRef.current="game"; setScreen("game"); }}/>
   );
   if (screen==="game") return (
-    <GameScreen session={session} initPlayers={players} client={clientRef.current} onEnd={handleGameEnd}/>
+    <GameScreen session={session} initPlayers={players} client={session?._offline ? null : clientRef.current} onEnd={handleGameEnd}/>
   );
   if (screen==="result") return (
   <ResultScreen result={result} session={session} onRestart={()=>{ setResult(null); setSession(null); setPlayers([]); setScreen("lobby"); }}/>
