@@ -57,7 +57,7 @@ class MWClient {
   send(type, payload={}) {
     if (this.ws?.readyState === 1) this.ws.send(JSON.stringify({type,...payload}));
   }
-  join(nick,code,mode,endMode,target,duration){ this.send("JOIN",{nick,roomCode:code,mode,endMode,target,duration}); }
+  join(nick,code,mode,endMode,target,duration,isCreate,startCash){ this.send("JOIN",{nick,roomCode:code,mode,endMode,target,duration,isCreate,startCash}); }
   ready(){ this.send("READY"); }
   start(){ this.send("START"); }
   buy(assetId,qty){ this.send("TRADE",{action:"buy",assetId,qty}); }
@@ -222,7 +222,12 @@ const fmtP = (a, p) => {
   if (a.type === "realestate") return `฿${Math.round(p).toLocaleString()}`;
   return `฿${p.toFixed(2)}`;
 };
-const genCode = () => Math.random().toString(36).slice(2,8).toUpperCase();
+const genCode = () => {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // no 0/O/1/I/l to avoid confusion
+  let s = '';
+  for (let i = 0; i < 6; i++) s += chars[Math.floor(Math.random() * chars.length)];
+  return s;
+};
 const calcNW = (cash, hold, prices) =>
   cash + Object.entries(hold).reduce((s,[id,q]) => s + (prices[id]||0)*q, 0);
 
@@ -1590,160 +1595,179 @@ function BlackjackModal({ onResult, onClose, onDoubleBet, bet=300, maxCash=Infin
 const HORSE_NAMES = ["Thunder","Lucky","Blaze","Storm","Flash"];
 const HORSE_EMOJIS = ["🐴","🐎","🦄","🏇","🎠"];
 const HORSE_COLORS = ["#fbbf24","#4ade80","#c084fc","#38bdf8","#f87171"];
-function HorseRaceWatchModal({ raceR, pickedHorse, onPickHorse, onBet, cash, onClose }) {
-  const [, tick] = useState(0);
-  useEffect(() => {
-    const id = setInterval(() => tick(n => n+1), 200);
-    return () => clearInterval(id);
-  }, []);
-  const race = raceR.current;
-  const pos = race.positions || [0,0,0,0,0];
-  const leadIdx = race.phase==='racing' ? pos.indexOf(Math.max(...pos)) : -1;
-  const pb = race.playerBet;
+function HorseRaceWatchModal({ cash, onBet, onWin, onLose, onClose }) {
+  const NPC_NICKS = ["สมชาย","นุ่น","แม็กซ์","จุ๋ม","เต้","บาส","พิม","เอิร์น"];
+  const [phase, setPhase] = useState('pick'); // pick | racing | result
+  const [picked, setPicked] = useState(-1);
+  const [positions, setPositions] = useState([0,0,0,0,0]);
+  const [winner, setWinner] = useState(-1);
+  const [playerBet, setPlayerBet] = useState(null); // {horse, amount}
+  const [won, setWon] = useState(false);
+  const [npcBets] = useState(() => {
+    const b = [[],[],[],[],[]];
+    for (let i = 0; i < 3 + Math.floor(Math.random()*5); i++) {
+      const h = Math.floor(Math.random()*5);
+      b[h] = [...b[h], {nick:NPC_NICKS[Math.floor(Math.random()*NPC_NICKS.length)], amount:Math.floor(Math.random()*400+100)}];
+    }
+    return b;
+  });
+  const ivRef  = useRef(null);
+  const posRef = useRef([0,0,0,0,0]);
+  const velRef = useRef([1.5,1.5,1.5,1.5,1.5]);
+  const winRef = useRef(-1);
 
-  const Track = () => (
-    <div style={{background:"linear-gradient(180deg,#0a1628,#0d1f3a)",borderRadius:14,padding:"12px 10px",marginBottom:12,border:"1px solid #ffffff08"}}>
-      {HORSE_NAMES.map((name,i)=>{
-        const isBet=pb?.horse===i, isWin=race.winner===i, isLead=leadIdx===i&&race.phase==='racing';
-        return (
-          <div key={i} style={{marginBottom:i<4?10:0}}>
-            <div style={{display:"flex",justifyContent:"space-between",marginBottom:3,fontSize:10}}>
-              <span style={{color:isWin?"#fbbf24":isBet?HORSE_COLORS[i]:isLead?"#4ade80":"#ffffff44",fontWeight:isBet||isWin||isLead?700:400}}>
-                {HORSE_EMOJIS[i]} {name}
-                {isLead&&<span style={{color:"#4ade80",marginLeft:4,fontSize:8}}>🔥นำ</span>}
-                {isBet&&!isWin&&<span style={{color:HORSE_COLORS[i],marginLeft:4}}>★</span>}
-                {isWin&&<span style={{marginLeft:4}}>🏆</span>}
-              </span>
-              <span style={{color:"#ffffff28",fontSize:8}}>{Math.round(pos[i])}m</span>
-            </div>
-            <div style={{height:26,background:"#ffffff06",borderRadius:8,overflow:"visible",position:"relative",border:`1px solid ${isWin?"#fbbf2430":isBet?HORSE_COLORS[i]+"20":"#ffffff08"}`}}>
-              {[25,50,75].map(p=><div key={p} style={{position:"absolute",left:`${p}%`,top:0,bottom:0,width:1,background:"#ffffff08"}}/>)}
-              <div style={{position:"absolute",left:0,top:0,bottom:0,width:`${pos[i]}%`,
-                background:isWin?`linear-gradient(90deg,${HORSE_COLORS[i]}20,${HORSE_COLORS[i]}40)`:isBet?`linear-gradient(90deg,${HORSE_COLORS[i]}12,${HORSE_COLORS[i]}28)`:"#ffffff08",
-                borderRadius:7,transition:"width .22s linear"}}/>
-              <div style={{position:"absolute",left:`${Math.max(0,Math.min(pos[i],93))}%`,top:"50%",transform:"translateY(-50%)",
-                fontSize:18,lineHeight:1,transition:"left .22s linear",zIndex:2,
-                filter:isWin?"drop-shadow(0 0 8px gold)":isLead?"drop-shadow(0 0 5px #4ade80)":undefined}}>
-                {HORSE_EMOJIS[i]}
+  useEffect(() => () => { if (ivRef.current) clearInterval(ivRef.current); }, []);
+
+  const startRace = (horse, amount) => {
+    if (!onBet(horse, amount)) return;
+    const w = Math.floor(Math.random() * 5);
+    winRef.current = w;
+    posRef.current = [0,0,0,0,0];
+    velRef.current = HORSE_NAMES.map(() => 1.5 + Math.random() * 1.5);
+    setPlayerBet({horse, amount});
+    setPositions([0,0,0,0,0]);
+    setPhase('racing');
+    ivRef.current = setInterval(() => {
+      velRef.current = velRef.current.map(v => Math.max(0.5, Math.min(4, v + (Math.random()-0.5)*1.5)));
+      posRef.current = posRef.current.map((p,i) =>
+        Math.min(100, p + velRef.current[i] + (i===winRef.current && p>62 ? 0.8 : 0))
+      );
+      if (Math.max(...posRef.current) >= 94) posRef.current[winRef.current] = 100;
+      setPositions([...posRef.current]);
+      if (posRef.current[winRef.current] >= 100) {
+        clearInterval(ivRef.current); ivRef.current = null;
+        const didWin = horse === winRef.current;
+        setWinner(winRef.current); setWon(didWin); setPhase('result');
+        if (didWin) onWin(Math.round(amount * 2.4));
+        else onLose();
+      }
+    }, 250);
+  };
+
+  const resetRace = () => {
+    setPicked(-1); setPhase('pick');
+    setPositions([0,0,0,0,0]); setWinner(-1);
+    setPlayerBet(null); setWon(false);
+  };
+
+  const Track = () => {
+    const leadIdx = phase==='racing' ? positions.indexOf(Math.max(...positions)) : -1;
+    return (
+      <div style={{background:"linear-gradient(180deg,#0a1628,#0d1f3a)",borderRadius:14,padding:"12px 10px",marginBottom:12,border:"1px solid #ffffff08"}}>
+        {HORSE_NAMES.map((name,i) => {
+          const isBet = playerBet?.horse===i, isWin = winner===i && phase==='result', isLead = leadIdx===i && phase==='racing';
+          return (
+            <div key={i} style={{marginBottom:i<4?10:0}}>
+              <div style={{display:"flex",justifyContent:"space-between",marginBottom:3,fontSize:10}}>
+                <span style={{color:isWin?"#fbbf24":isBet?HORSE_COLORS[i]:isLead?"#4ade80":"#ffffff44",fontWeight:isBet||isWin||isLead?700:400}}>
+                  {HORSE_EMOJIS[i]} {name}
+                  {isLead&&<span style={{color:"#4ade80",marginLeft:4,fontSize:8}}>🔥นำ</span>}
+                  {isBet&&!isWin&&<span style={{color:HORSE_COLORS[i],marginLeft:4}}>★</span>}
+                  {isWin&&<span style={{marginLeft:4}}>🏆</span>}
+                </span>
+                <span style={{color:"#ffffff28",fontSize:8}}>{Math.round(positions[i])}m</span>
+              </div>
+              <div style={{height:26,background:"#ffffff06",borderRadius:8,overflow:"visible",position:"relative",border:`1px solid ${isWin?"#fbbf2430":isBet?HORSE_COLORS[i]+"20":"#ffffff08"}`}}>
+                {[25,50,75].map(p=><div key={p} style={{position:"absolute",left:`${p}%`,top:0,bottom:0,width:1,background:"#ffffff08"}}/>)}
+                <div style={{position:"absolute",left:0,top:0,bottom:0,width:`${positions[i]}%`,
+                  background:isWin?`linear-gradient(90deg,${HORSE_COLORS[i]}20,${HORSE_COLORS[i]}40)`:isBet?`linear-gradient(90deg,${HORSE_COLORS[i]}12,${HORSE_COLORS[i]}28)`:"#ffffff08",
+                  borderRadius:7,transition:"width .22s linear"}}/>
+                <div style={{position:"absolute",left:`${Math.max(0,Math.min(positions[i],93))}%`,top:"50%",transform:"translateY(-50%)",
+                  fontSize:18,lineHeight:1,transition:"left .22s linear",zIndex:2,
+                  filter:isWin?"drop-shadow(0 0 8px gold)":isLead?"drop-shadow(0 0 5px #4ade80)":undefined}}>
+                  {HORSE_EMOJIS[i]}
+                </div>
               </div>
             </div>
-          </div>
-        );
-      })}
-    </div>
-  );
+          );
+        })}
+      </div>
+    );
+  };
 
   return (
     <Modal onClose={onClose} title="🏇 แข่งม้า">
-      {/* BREAK */}
-      {race.phase==='break' && (
-        <div style={{textAlign:"center",padding:"10px 0 16px"}}>
-          <div style={{fontSize:64,fontWeight:900,color:"#fbbf24",textShadow:"0 0 30px #fbbf2455",fontVariantNumeric:"tabular-nums",animation:"notif-in .15s ease"}}>
-            {race.breakTick}
-          </div>
-          <div style={{fontSize:12,color:"#ffffff44",marginBottom:16}}>วินาทีก่อนเปิดรับเดิมพัน</div>
-          <div style={{display:"flex",justifyContent:"center",gap:10,flexWrap:"wrap"}}>
-            {HORSE_NAMES.map((n,i)=>(
-              <div key={i} style={{textAlign:"center",padding:"10px 12px",borderRadius:12,background:"#ffffff06",border:`1px solid ${HORSE_COLORS[i]}22`,minWidth:56}}>
-                <div style={{fontSize:26}}>{HORSE_EMOJIS[i]}</div>
-                <div style={{fontSize:9,color:HORSE_COLORS[i],fontWeight:700,marginTop:3}}>{n}</div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* BETTING */}
-      {race.phase==='betting' && (
+      {/* PICK */}
+      {phase==='pick' && (
         <div>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
-            <div style={{fontSize:11,color:"#fbbf24",fontWeight:700}}>🎯 เลือกม้า</div>
-            <div style={{fontSize:12,fontWeight:900,color:"#fbbf24",fontVariantNumeric:"tabular-nums"}}>{race.betTick}s</div>
+            <div style={{fontSize:11,color:"#fbbf24",fontWeight:700}}>🎯 เลือกม้าที่ชอบ</div>
+            <div style={{fontSize:9,color:"#ffffff33"}}>ชนะ ×2.4</div>
           </div>
           <div style={{display:"flex",flexDirection:"column",gap:7,marginBottom:12}}>
-            {HORSE_NAMES.map((name,i)=>{
-              const isPick=pickedHorse===i, isBet=pb?.horse===i;
-              const npc=(race.npcBets?.[i]||[]).map(b=>b.nick);
-              const online=(race.onlineBets||[]).filter(b=>b.horse===i).map(b=>b.nick);
-              const allBettors=[...online,...npc];
+            {HORSE_NAMES.map((name,i) => {
+              const isPick = picked===i;
+              const npc = npcBets[i].map(b=>b.nick);
               return (
-                <button key={i} onClick={()=>!isBet&&onPickHorse(isPick?-1:i)} style={{
-                  padding:"10px 14px",borderRadius:11,cursor:isBet?"default":"pointer",fontFamily:G.font,
-                  border:`1px solid ${isBet?"#4ade8044":isPick?HORSE_COLORS[i]+"55":"#ffffff12"}`,
-                  background:isBet?"#4ade8010":isPick?`${HORSE_COLORS[i]}14`:"#ffffff04",
+                <button key={i} onClick={()=>setPicked(isPick?-1:i)} style={{
+                  padding:"10px 14px",borderRadius:11,cursor:"pointer",fontFamily:G.font,
+                  border:`1px solid ${isPick?HORSE_COLORS[i]+"55":"#ffffff12"}`,
+                  background:isPick?`${HORSE_COLORS[i]}14`:"#ffffff04",
                   display:"flex",justifyContent:"space-between",alignItems:"center",transition:"all .15s",
-                  boxShadow:isPick&&!isBet?`0 0 14px ${HORSE_COLORS[i]}22`:undefined}}>
+                  boxShadow:isPick?`0 0 14px ${HORSE_COLORS[i]}22`:undefined}}>
                   <div style={{display:"flex",alignItems:"center",gap:10}}>
                     <span style={{fontSize:22}}>{HORSE_EMOJIS[i]}</span>
-                    <div>
-                      <div style={{color:isBet?"#4ade80":isPick?HORSE_COLORS[i]:"#ffffff88",fontWeight:700,fontSize:12}}>{name}</div>
-                      {isBet&&<div style={{fontSize:9,color:"#4ade8088"}}>✓ เดิมพัน ฿{pb.amount.toLocaleString()}</div>}
-                    </div>
+                    <div style={{color:isPick?HORSE_COLORS[i]:"#ffffff88",fontWeight:700,fontSize:12}}>{name}</div>
                   </div>
-                  <div style={{textAlign:"right"}}>
-                    {online.length>0&&<div style={{fontSize:8,color:HORSE_COLORS[i],fontWeight:700}}>{online.join(' · ')}</div>}
-                    {npc.length>0&&<div style={{fontSize:8,color:"#ffffff28"}}>{npc.join(' · ')}</div>}
-                    {allBettors.length>0&&<div style={{fontSize:7,color:"#ffffff18"}}>{allBettors.length} คนเดิมพัน</div>}
-                  </div>
+                  {npc.length>0&&<div style={{fontSize:8,color:"#ffffff28"}}>{npc.join(' · ')}</div>}
                 </button>
               );
             })}
           </div>
-          {pickedHorse>=0 && !pb && (
+          {picked>=0 && (
             <div style={{marginBottom:8}}>
-              <div style={{fontSize:10,color:HORSE_COLORS[pickedHorse],marginBottom:6,fontWeight:700}}>
-                เดิมพัน {HORSE_EMOJIS[pickedHorse]} {HORSE_NAMES[pickedHorse]}:
+              <div style={{fontSize:10,color:HORSE_COLORS[picked],marginBottom:6,fontWeight:700}}>
+                เดิมพัน {HORSE_EMOJIS[picked]} {HORSE_NAMES[picked]}:
               </div>
               <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
                 {[100,300,500,1000,2000].filter(v=>v<=cash).map(v=>(
-                  <button key={v} onClick={()=>onBet(pickedHorse,v)} style={{
+                  <button key={v} onClick={()=>startRace(picked,v)} style={{
                     padding:"9px 14px",borderRadius:9,cursor:"pointer",fontFamily:G.font,
-                    border:`1px solid ${HORSE_COLORS[pickedHorse]}40`,
-                    background:`${HORSE_COLORS[pickedHorse]}14`,
-                    color:HORSE_COLORS[pickedHorse],fontSize:12,fontWeight:700,
+                    border:`1px solid ${HORSE_COLORS[picked]}40`,
+                    background:`${HORSE_COLORS[picked]}14`,
+                    color:HORSE_COLORS[picked],fontSize:12,fontWeight:700,
                   }}>฿{v.toLocaleString()}</button>
                 ))}
               </div>
             </div>
           )}
-          {pb&&<div style={{textAlign:"center",padding:"10px",borderRadius:10,background:"#4ade8010",border:"1px solid #4ade8028",fontSize:11,color:"#4ade80",fontWeight:700}}>
-            ✓ เดิมพัน {HORSE_EMOJIS[pb.horse]} {HORSE_NAMES[pb.horse]} ฿{pb.amount.toLocaleString()} — ปิด modal ได้เลย!
-          </div>}
+          <div style={{textAlign:"center",marginTop:10,fontSize:9,color:"#ffffff22"}}>เลือกม้า → กดจำนวนเดิมพัน → แข่งเลย!</div>
         </div>
       )}
 
       {/* RACING */}
-      {race.phase==='racing' && (
+      {phase==='racing' && (
         <div>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
             <div style={{fontSize:11,color:"#4ade80",fontWeight:700}}>🏁 กำลังแข่ง!</div>
-            {leadIdx>=0&&<div style={{fontSize:10,color:"#4ade80"}}>{HORSE_EMOJIS[leadIdx]} {HORSE_NAMES[leadIdx]} นำ 🔥</div>}
           </div>
           <Track/>
-          {pb&&<div style={{textAlign:"center",fontSize:10,color:HORSE_COLORS[pb.horse],fontWeight:700}}>
-            {HORSE_EMOJIS[pb.horse]} {HORSE_NAMES[pb.horse]} — ฿{pb.amount.toLocaleString()} · ลุ้นรับ ฿{Math.round(pb.amount*2.4).toLocaleString()}
+          {playerBet&&<div style={{textAlign:"center",fontSize:10,color:HORSE_COLORS[playerBet.horse],fontWeight:700}}>
+            {HORSE_EMOJIS[playerBet.horse]} {HORSE_NAMES[playerBet.horse]} — ฿{playerBet.amount.toLocaleString()} · ลุ้นรับ ฿{Math.round(playerBet.amount*2.4).toLocaleString()}
           </div>}
         </div>
       )}
 
       {/* RESULT */}
-      {race.phase==='result' && race.winner>=0 && (
+      {phase==='result' && winner>=0 && (
         <div>
           <Track/>
           <div style={{textAlign:"center",padding:"14px",borderRadius:12,
-            background:race.won?"linear-gradient(135deg,#14532d20,#16653420)":"linear-gradient(135deg,#7f1d1d20,#991b1b20)",
-            border:`1px solid ${race.won?"#4ade8035":"#f8717135"}`,
-            fontSize:14,fontWeight:700,
-            color:race.won?"#4ade80":"#f87171",
-            animation:"notif-in .4s ease"}}>
-            {race.won
-              ?`🏆 ${HORSE_EMOJIS[race.winner]} ${HORSE_NAMES[race.winner]} ชนะ! +฿${(Math.round(pb.amount*2.4)-pb.amount).toLocaleString()}`
-              :`💔 ${HORSE_EMOJIS[race.winner]} ${HORSE_NAMES[race.winner]} ชนะ${pb?` — เสีย ฿${pb.amount.toLocaleString()}`:"!"}`}
+            background:won?"linear-gradient(135deg,#14532d20,#16653420)":"linear-gradient(135deg,#7f1d1d20,#991b1b20)",
+            border:`1px solid ${won?"#4ade8035":"#f8717135"}`,
+            fontSize:14,fontWeight:700,color:won?"#4ade80":"#f87171",animation:"notif-in .4s ease"}}>
+            {won
+              ?`🏆 ${HORSE_EMOJIS[winner]} ${HORSE_NAMES[winner]} ชนะ! +฿${(Math.round(playerBet.amount*2.4)-playerBet.amount).toLocaleString()}`
+              :`💔 ${HORSE_EMOJIS[winner]} ${HORSE_NAMES[winner]} ชนะ${playerBet?` — เสีย ฿${playerBet.amount.toLocaleString()}`:"!"}`}
           </div>
+          <button onClick={resetRace} style={{
+            width:"100%",marginTop:10,padding:"11px",borderRadius:10,border:"1px solid #fbbf2440",
+            background:"#fbbf2412",color:"#fbbf24",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:G.font,
+          }}>🏇 แข่งอีก!</button>
         </div>
       )}
 
-      <div style={{textAlign:"center",marginTop:10,fontSize:9,color:"#ffffff22"}}>ชนะ = ×2.4 · ปิด modal ได้ race วิ่งต่อ</div>
+      <div style={{textAlign:"center",marginTop:10,fontSize:9,color:"#ffffff22"}}>ชนะ = ×2.4 · ปิด modal ได้ระหว่างแข่ง</div>
     </Modal>
   );
 }
@@ -2822,20 +2846,9 @@ function GameScreen({ session, initPlayers, client, onEnd }) {
   const optionsR = useRef([]); // [{id,type,assetId,assetName,assetEmoji,strike,qty,expiry,openPrice}]
   const [options, setOptions] = useState([]);
 
-  // ── HORSE RACE (automated) ──
-  const raceR = useRef({
-    phase:"break", breakTick:20,
-    betTick:0, positions:[0,0,0,0,0], velocities:[1,1,1,1,1],
-    winner:-1, playerBet:null, npcBets:[[],[],[],[],[]], won:false,
-  });
-  const racingSubIdR = useRef(null); // racing sub-interval handle for cleanup
-  const [race, setRace] = useState({...raceR.current});
-  const [racePickedHorse, setRacePickedHorse] = useState(-1);
+  // ── HORSE RACE (solo, self-contained in modal) ──
+  // state managed inside HorseRaceWatchModal; no refs needed here
 
-  // ── MONOPOLY AUCTION ──
-  const auctionR = useRef({phase:"idle",countdown:25,asset:null,currentBid:500,currentBidder:null,window:0,ownerNick:null,ownerExpiry:0});
-  const [auction, setAuction] = useState(null);
-  const [bidInput, setBidInput] = useState(500);
   const [openingItem, setOpeningItem] = useState(null); // gacha animation state: {item, boxType}
 
   // ── NEW: flash / ticker / trade history / confetti ──
@@ -2923,128 +2936,6 @@ function GameScreen({ session, initPlayers, client, onEnd }) {
           if(msg.eventTimer!==undefined) setEvTimer(msg.eventTimer);
           if(msg.hypeIdx) { hypeIdxR.current={...msg.hypeIdx}; setHypeIdx({...msg.hypeIdx}); }
           if(msg.board) setBoard(msg.board);
-          // ── RACE (server-driven, silent state sync) ──
-          if(msg.race) {
-            const sr=msg.race, cr=raceR.current, prevP=cr.phase;
-            cr.breakTick=sr.breakTick; cr.betTick=sr.betTick; cr.racingTick=sr.racingTick;
-            cr.winner=sr.winner; cr.npcBets=sr.npcBets; cr.onlineBets=sr.playerBets||[];
-            if(sr.phase!==prevP) {
-              cr.phase=sr.phase;
-              if(sr.phase==='betting') {
-                cr.playerBet=null; cr.positions=[0,0,0,0,0]; cr.velocities=HORSE_NAMES.map(()=>1.5+Math.random()*1.5);
-                cr.won=false; setRace({...cr}); setRacePickedHorse(-1);
-                // RACE_START fires the notification — no dupe here
-              } else if(sr.phase==='racing') {
-                cr.positions=[0,0,0,0,0]; cr.velocities=HORSE_NAMES.map(()=>1.5+Math.random()*1.5);
-                setRace({...cr});
-                if(racingSubIdR.current) clearInterval(racingSubIdR.current);
-                const sW=sr.winner;
-                racingSubIdR.current=setInterval(()=>{
-                  const rs2=raceR.current;
-                  if(rs2.phase!=='racing'){clearInterval(racingSubIdR.current);racingSubIdR.current=null;return;}
-                  rs2.velocities=rs2.velocities.map(v=>Math.max(0.5,Math.min(4,v+(Math.random()-0.5)*1.5)));
-                  rs2.positions=rs2.positions.map((p,i)=>Math.min(100,p+rs2.velocities[i]+(i===sW&&p>60?0.5:0)));
-                  if(Math.max(...rs2.positions)>=95) rs2.positions[sW]=100;
-                  const fi=rs2.positions.findIndex(p=>p>=100);
-                  if(fi>=0){
-                    // Visually freeze at finish line — server TICK will confirm phase='result'
-                    rs2.positions[fi]=100;
-                    setRace({...rs2});
-                    clearInterval(racingSubIdR.current); racingSubIdR.current=null;
-                  } else { setRace({...rs2}); }
-                },250);
-              } else if(sr.phase==='result') {
-                if(racingSubIdR.current){clearInterval(racingSubIdR.current);racingSubIdR.current=null;}
-                if(prevP==='racing') cr.positions=cr.positions.map((p,i)=>i===sr.winner?100:Math.min(99,p));
-                cr.won = cr.playerBet?.horse === sr.winner;
-                setRace({...cr});
-              } else { // break
-                if(racingSubIdR.current){clearInterval(racingSubIdR.current);racingSubIdR.current=null;}
-                setRace({...cr});
-              }
-            } else if(sr.phase!=='racing') { setRace({...cr}); } // countdown tick update
-          }
-          // ── AUCTION (server-driven, silent state sync) ──
-          if(msg.auction) {
-            const sa=msg.auction, ca=auctionR.current, prevA=ca.phase;
-            if(sa.phase==='idle') {
-              if(prevA!=='idle'){ auctionR.current={phase:'idle',countdown:25,asset:null,currentBid:0,currentBidder:null,window:0,ownerNick:null,ownerExpiry:0}; setAuction(null); }
-            } else if(sa.phase==='bidding') {
-              const aAsset=ASSETS.find(a=>a.id===sa.assetId)||gameAssets.find(a=>a.id===sa.assetId);
-              if(prevA!=='bidding') {
-                auctionR.current={phase:'bidding',asset:aAsset||{id:sa.assetId,name:sa.assetId,emoji:'🏷️',bp:0},
-                  currentBid:sa.currentBid,currentBidder:sa.currentBidderNick===session.nick?'player':(sa.currentBidderNick||null),
-                  window:sa.window,ownerNick:null,ownerExpiry:0};
-                setAuction({...auctionR.current}); setBidInput(sa.currentBid+200);
-                // AUCTION_START fires the notification
-              } else {
-                ca.window=sa.window; ca.currentBid=sa.currentBid;
-                ca.currentBidder=sa.currentBidderNick===session.nick?'player':(sa.currentBidderNick||null);
-                setAuction({...ca});
-              }
-            } else if(sa.phase==='owned') {
-              if(prevA!=='owned') {
-                const aAsset2=ASSETS.find(a=>a.id===sa.assetId)||ca.asset;
-                auctionR.current={phase:'owned',asset:aAsset2||ca.asset,currentBid:sa.currentBid,currentBidder:sa.currentBidderNick,
-                  window:0,ownerNick:sa.ownerNick,ownerExpiry:sa.ownerExpiry};
-                setAuction({...auctionR.current}); // AUCTION_END fires notification
-              } else { ca.ownerExpiry=sa.ownerExpiry; setAuction({...ca}); }
-            }
-          }
-          break;
-        case "RACE_START":
-          { const cr2=raceR.current;
-            cr2.playerBet=null; cr2.positions=[0,0,0,0,0]; cr2.velocities=HORSE_NAMES.map(()=>1.5+Math.random()*1.5);
-            cr2.betTick=msg.betTick||25; cr2.won=false; cr2.winner=-1; cr2.phase='betting';
-            setRace({...cr2}); setRacePickedHorse(-1);
-            showNotif("🏇 เปิดรับเดิมพัน! แข่งม้า — 25 วิ!", "#fbbf24"); _snd.play('event');
-          }
-          break;
-        case "RACE_RESULT":
-          { const pb2=raceR.current.playerBet;
-            raceR.current.won = pb2?.horse === msg.winner;
-            raceR.current.winner = msg.winner;
-            if(pb2) {
-              if(pb2.horse===msg.winner){ _snd.play('jackpot'); setConfetti(true); setTimeout(()=>setConfetti(false),3000); showNotif(`🏆 ${msg.winnerEmoji} ${msg.winnerName} ชนะ!`,"#fbbf24"); }
-              else { _snd.play('bust'); showNotif(`💔 ${msg.winnerEmoji} ${msg.winnerName} ชนะ — เสีย ${fmt(pb2.amount)}`,"#f87171"); }
-            } else { showNotif(`🏁 ${msg.winnerEmoji} ${msg.winnerName} ชนะ!`,"#94a3b8"); }
-          }
-          break;
-        case "RACE_BET_UPDATE":
-          raceR.current.onlineBets=msg.playerBets||[]; setRace({...raceR.current});
-          break;
-        case "RACE_BET_RESULT":
-          if(msg.ok){ applyServerCash(msg.cash); raceR.current.playerBet={horse:msg.horse,amount:msg.amount}; setRace({...raceR.current}); setRacePickedHorse(msg.horse); showNotif(`🐎 เดิมพัน ${HORSE_EMOJIS[msg.horse]} ${HORSE_NAMES[msg.horse]} ฿${msg.amount.toLocaleString()}`,HORSE_COLORS[msg.horse]); }
-          else showNotif(`❌ ${msg.msg}`,"#f87171");
-          break;
-        case "AUCTION_START":
-          { const aAsset3=ASSETS.find(a=>a.id===msg.assetId)||gameAssets.find(a=>a.id===msg.assetId)||{id:msg.assetId,name:msg.assetName,emoji:msg.assetEmoji,bp:0};
-            auctionR.current={phase:'bidding',asset:aAsset3,currentBid:msg.currentBid,currentBidder:null,window:msg.window,ownerNick:null,ownerExpiry:0};
-            setAuction({...auctionR.current}); setBidInput(msg.currentBid+200);
-            showNotif(`🔨 AUCTION! สิทธิ์ผูกขาด ${msg.assetEmoji}${msg.assetName} — ประมูล ${msg.window} วิ!`,"#c084fc"); _snd.play('event');
-          }
-          break;
-        case "AUCTION_BID_UPDATE":
-          if(auctionR.current?.phase==='bidding'){
-            const wasLead=auctionR.current.currentBidder==='player';
-            auctionR.current.currentBid=msg.currentBid;
-            auctionR.current.currentBidder=msg.currentBidderNick===session.nick?'player':msg.currentBidderNick;
-            if(wasLead&&auctionR.current.currentBidder!=='player') showNotif(`😤 ${msg.currentBidderNick} เสนอสูงกว่า — ฿${msg.currentBid.toLocaleString()}!`,"#f87171");
-            setAuction({...auctionR.current});
-          }
-          break;
-        case "AUCTION_BID_RESULT":
-          if(msg.ok){ applyServerCash(msg.cash); if(auctionR.current){auctionR.current.currentBidder='player'; setBidInput((auctionR.current.currentBid||0)+200); setAuction({...auctionR.current});} showNotif(`🔨 Bid ฿${auctionR.current?.currentBid?.toLocaleString()} — คุณนำอยู่!`,"#c084fc"); }
-          else showNotif(`❌ ${msg.msg}`,"#f87171");
-          break;
-        case "AUCTION_END":
-          if(!msg.winner){ auctionR.current.phase='idle'; setAuction(null); }
-          else if(msg.winner===session.nick){ if(auctionR.current){auctionR.current.phase='owned';auctionR.current.ownerNick=msg.winner;auctionR.current.ownerExpiry=60;setAuction({...auctionR.current});} showNotif(`👑 คุณชนะ! ผูกขาด ${auctionR.current?.asset?.emoji||''}${auctionR.current?.asset?.name||''} เก็บค่าผ่านทาง!`,"#c084fc"); _snd.play('jackpot'); }
-          else { if(auctionR.current){auctionR.current.phase='owned';auctionR.current.ownerNick=msg.winner;auctionR.current.ownerExpiry=60;setAuction({...auctionR.current});} showNotif(`${msg.winner} ชนะประมูล ${auctionR.current?.asset?.emoji||''}`,"#ffffff44"); }
-          break;
-        case "AUCTION_EXPIRED":
-          showNotif(`${msg.assetEmoji} สิทธิ์ผูกขาดหมดอายุ`,"#ffffff44");
-          auctionR.current.phase='idle'; setAuction(null);
           break;
         case "TRADE_RESULT":
           if(msg.ok){
@@ -3129,43 +3020,6 @@ function GameScreen({ session, initPlayers, client, onEnd }) {
           if(msg.gLoss!==undefined){ gLossR.current=msg.gLoss; setGLoss(msg.gLoss); }
           if(msg.prices){ priceR.current={...msg.prices}; setPrices({...msg.prices}); }
           if(msg.hypeIdx){ hypeIdxR.current={...msg.hypeIdx}; setHypeIdx({...msg.hypeIdx}); }
-          if(msg.race){
-            const sr=msg.race, cr=raceR.current;
-            cr.phase=sr.phase; cr.breakTick=sr.breakTick||0; cr.betTick=sr.betTick||0;
-            cr.racingTick=sr.racingTick||0; cr.winner=sr.winner;
-            cr.npcBets=sr.npcBets||[[],[],[],[],[]]; cr.onlineBets=sr.playerBets||[];
-            if(sr.myBet){ cr.playerBet=sr.myBet; setRacePickedHorse(sr.myBet.horse); }
-            if(sr.phase==='racing' && !racingSubIdR.current){
-              cr.positions=[0,0,0,0,0]; cr.velocities=HORSE_NAMES.map(()=>1.5+Math.random()*1.5);
-              const sWs=sr.winner;
-              racingSubIdR.current=setInterval(()=>{
-                const rs2=raceR.current;
-                if(rs2.phase!=='racing'){clearInterval(racingSubIdR.current);racingSubIdR.current=null;return;}
-                rs2.velocities=rs2.velocities.map(v=>Math.max(0.5,Math.min(4,v+(Math.random()-0.5)*1.5)));
-                rs2.positions=rs2.positions.map((p,i)=>Math.min(100,p+rs2.velocities[i]+(i===sWs&&p>60?0.5:0)));
-                if(Math.max(...rs2.positions)>=95) rs2.positions[sWs]=100;
-                const fi=rs2.positions.findIndex(p=>p>=100);
-                if(fi>=0){rs2.positions[fi]=100;setRace({...rs2});clearInterval(racingSubIdR.current);racingSubIdR.current=null;}
-                else setRace({...rs2});
-              },250);
-            }
-            setRace({...cr});
-          }
-          if(msg.auction){
-            const sa=msg.auction;
-            if(sa.phase==='bidding'){
-              const aAsset=ASSETS.find(a=>a.id===sa.assetId)||{id:sa.assetId,name:sa.assetId,emoji:'🏷️',bp:0};
-              auctionR.current={phase:'bidding',asset:aAsset,currentBid:sa.currentBid,
-                currentBidder:sa.currentBidderNick===session.nick?'player':(sa.currentBidderNick||null),
-                window:sa.window,ownerNick:null,ownerExpiry:0};
-              setAuction({...auctionR.current}); setBidInput(sa.currentBid+200);
-            } else if(sa.phase==='owned'){
-              const aAsset=ASSETS.find(a=>a.id===sa.assetId)||{id:sa.assetId,name:sa.assetId,emoji:'🏷️',bp:0};
-              auctionR.current={phase:'owned',asset:aAsset,currentBid:sa.currentBid,currentBidder:sa.currentBidderNick,
-                window:0,ownerNick:sa.ownerNick,ownerExpiry:sa.ownerExpiry};
-              setAuction({...auctionR.current});
-            }
-          }
           break;
       }
     };
@@ -3344,14 +3198,6 @@ function GameScreen({ session, initPlayers, client, onEnd }) {
     } else if (c === "ไฮปลง") {
       ['card','figure','gameid'].forEach(t=>{ hypeIdxR.current[t]=0.2; });
       setHypeIdx({...hypeIdxR.current}); showNotif("🔧 Hype ตก ×0.2","#f87171");
-    // ── Race & Auction ──
-    } else if (c === "เรซ") {
-      raceR.current.phase='break'; raceR.current.breakTick=1;
-      setRace({...raceR.current});
-      showNotif("🔧 Race เริ่มใน 1 วิ 🏇","#fbbf24");
-    } else if (c === "ประมูล") {
-      auctionR.current.phase='idle'; auctionR.current.countdown=1;
-      showNotif("🔧 Auction เริ่มใน 1 วิ 🔨","#c084fc");
     // ── เงิน ──
     } else if (c === "เงิน") {
       const amt = parseInt(parts[1])||10000;
@@ -3378,7 +3224,7 @@ function GameScreen({ session, initPlayers, client, onEnd }) {
       showNotif("🔧 ❄️ แช่แข็งราคา 10 วิ","#38bdf8");
     // ── ช่วยเหลือ ──
     } else {
-      showNotif("🔧 คำสั่ง: ขึ้น / ลง / วิกฤต / มูน / ทอง / อีเวนต์ [id] / หยุดอีเวนต์ / ไฮปขึ้น / ไฮปลง / เรซ / ประมูล / เงิน [จำนวน] / รีเซ็ต / ราคา [ASSET] [ราคา] / แช่แข็ง","#ffffff44");
+      showNotif("🔧 คำสั่ง: ขึ้น / ลง / วิกฤต / มูน / ทอง / อีเวนต์ [id] / หยุดอีเวนต์ / ไฮปขึ้น / ไฮปลง / เงิน [จำนวน] / รีเซ็ต / ราคา [ASSET] [ราคา] / แช่แข็ง","#ffffff44");
     }
   };
 
@@ -3679,7 +3525,7 @@ function GameScreen({ session, initPlayers, client, onEnd }) {
 
       // options expiry is handled in its own useEffect (timestamp-based, works online+offline)
 
-      // race & auction handled in own useEffect (works online+offline)
+      // horse race is now solo/modal-driven (no tick needed here)
 
       // NPC marketplace buyers (every 10 ticks) — เงินมาจากระบบ ไม่หักจากผู้เล่นหรือ bot คนไหน
       if(tickR.current % 10 === 0){
@@ -3768,126 +3614,10 @@ function GameScreen({ session, initPlayers, client, onEnd }) {
     return () => clearInterval(id);
   }, [showNotif, syncCash]);
 
-  // ── RACE & AUCTION (runs in both online & offline, every 1s) ──
+  // ── BOX STOCK RESTOCK (every 1s tick, restock every 120 ticks) ──
   useEffect(() => {
     const id = setInterval(() => {
-      if (onlineRef.current) return; // online mode: race & auction driven by timeLeft effect
-      // ── HORSE RACE (automated, horse-based) ──
-      {
-        const NPC_NICKS = ["สมชาย","นุ่น","แม็กซ์","จุ๋ม","เต้","บาส","พิม","เอิร์น","ต้น","มิ้น"];
-        const rs = raceR.current;
-        if (rs.phase === 'break') {
-          rs.breakTick--;
-          if (rs.breakTick <= 0) {
-            rs.phase = 'betting'; rs.betTick = 25;
-            rs.positions = [0,0,0,0,0];
-            rs.velocities = HORSE_NAMES.map(()=>1.5+Math.random()*1.5);
-            rs.winner = -1; rs.playerBet = null; rs.npcBets = [[],[],[],[],[]]; rs.won = false;
-            setRace({...rs}); setRacePickedHorse(-1);
-            showNotif("🏇 เปิดรับเดิมพัน! แข่งม้า — 25 วิ!", "#fbbf24");
-            _snd.play('event');
-          } else { setRace({...rs}); }
-        } else if (rs.phase === 'betting') {
-          rs.betTick--;
-          if (Math.random() < 0.35) {
-            const nick = NPC_NICKS[Math.floor(Math.random()*NPC_NICKS.length)];
-            const horse = Math.floor(Math.random()*5);
-            const amount = Math.floor(Math.random()*400+100);
-            rs.npcBets[horse] = [...rs.npcBets[horse].slice(-2), {nick, amount}];
-          }
-          if (rs.betTick <= 0) {
-            rs.phase = 'racing';
-            setRace({...rs});
-            showNotif("🏁 ม้าออกสตาร์ท!", "#fbbf24"); _snd.play('beepHi');
-            // fast racing sub-interval at 250ms for smooth animation (~15s race)
-            if (racingSubIdR.current) clearInterval(racingSubIdR.current);
-            racingSubIdR.current = setInterval(() => {
-              const rs = raceR.current;
-              if (rs.phase !== 'racing') { clearInterval(racingSubIdR.current); racingSubIdR.current = null; return; }
-              rs.velocities = rs.velocities.map(v => Math.max(0.5, Math.min(4, v + (Math.random()-0.5)*1.5)));
-              rs.positions = rs.positions.map((p,i) => Math.min(100, p + rs.velocities[i]));
-              const finIdx = rs.positions.findIndex(p => p >= 100);
-              if (finIdx >= 0) {
-                rs.winner = finIdx; rs.phase = 'result';
-                rs.won = rs.playerBet?.horse === finIdx;
-                if (rs.playerBet) {
-                  if (rs.won) {
-                    const pay = Math.round(rs.playerBet.amount * 2.4); cashR.current += pay; syncCash();
-                    showNotif(`🏆 ${HORSE_EMOJIS[finIdx]} ${HORSE_NAMES[finIdx]} ชนะ! +${fmt(pay)} (×2.4)`, "#fbbf24");
-                    _snd.play('jackpot'); setConfetti(true); setTimeout(()=>setConfetti(false),3000);
-                  } else {
-                    showNotif(`💔 ${HORSE_EMOJIS[finIdx]} ${HORSE_NAMES[finIdx]} ชนะ — เสีย ${fmt(rs.playerBet.amount)}`, "#f87171");
-                    _snd.play('bust');
-                  }
-                } else {
-                  showNotif(`🏁 ${HORSE_EMOJIS[finIdx]} ${HORSE_NAMES[finIdx]} ชนะ!`, "#94a3b8");
-                }
-                setRace({...rs});
-                setTimeout(()=>{ raceR.current.phase='break'; raceR.current.breakTick=30+Math.floor(Math.random()*20); setRace({...raceR.current}); }, 6000);
-                clearInterval(racingSubIdR.current); racingSubIdR.current = null;
-              } else {
-                setRace({...rs});
-              }
-            }, 250);
-          } else { setRace({...rs}); }
-        }
-      }
-      // ── MONOPOLY AUCTION ──
-      {
-        const as = auctionR.current;
-        if (as.phase === 'idle') {
-          as.countdown--;
-          if (as.countdown <= 0) {
-            const a = gameAssets[Math.floor(Math.random()*gameAssets.length)];
-            as.asset = a; as.phase = 'bidding'; as.window = 20;
-            as.currentBid = Math.round((priceR.current[a.id]||a.bp)*0.15)||300;
-            as.currentBidder = null;
-            setAuction({...as}); setBidInput(as.currentBid+200);
-            showNotif(`🔨 AUCTION! สิทธิ์ผูกขาด ${a.emoji}${a.name} — ประมูล 20 วิ!`, "#c084fc");
-            _snd.play('event');
-          }
-        } else if (as.phase === 'bidding') {
-          as.window--;
-          if (Math.random() < 0.08 && botsR.current.length > 0) {
-            const bot = botsR.current[Math.floor(Math.random()*botsR.current.length)];
-            const botBid = as.currentBid + Math.floor(Math.random()*300)+100;
-            if (bot.cash >= botBid && (as.currentBidder !== "player" || Math.random()<0.4)) {
-              if (as.currentBidder === "player") { cashR.current += as.currentBid; syncCash(); }
-              as.currentBid = botBid; as.currentBidder = bot.nick||bot.name;
-            }
-          }
-          if (as.window <= 0) {
-            if (!as.currentBidder) {
-              showNotif("🔨 ประมูลจบ — ไม่มีผู้ชนะ","#ffffff44");
-              as.phase='idle'; as.countdown=35+Math.floor(Math.random()*20); setAuction(null);
-            } else if (as.currentBidder === "player") {
-              as.phase='owned'; as.ownerNick=session.nick; as.ownerExpiry=60;
-              showNotif(`👑 คุณชนะ! ผูกขาด ${as.asset.emoji}${as.asset.name} 60 วิ เก็บค่าผ่านทาง!`, "#c084fc");
-              _snd.play('jackpot'); setAuction({...as});
-            } else {
-              as.phase='owned'; as.ownerNick=as.currentBidder; as.ownerExpiry=60;
-              showNotif(`${as.currentBidder} ชนะประมูล ${as.asset.emoji}${as.asset.name}`, "#ffffff44");
-              setAuction({...as});
-            }
-          } else { setAuction({...as}); }
-        } else if (as.phase === 'owned') {
-          as.ownerExpiry--;
-          if (as.ownerExpiry <= 0) {
-            showNotif(`${as.asset.emoji} สิทธิ์ผูกขาดหมดอายุ`, "#ffffff44");
-            as.phase='idle'; as.countdown=35+Math.floor(Math.random()*20); setAuction(null);
-          } else {
-            if (as.ownerNick === session.nick && as.ownerExpiry % 5 === 0) {
-              const toll = Math.max(10, Math.round((priceR.current[as.asset.id]||as.asset.bp)*0.018));
-              cashR.current += toll; syncCash();
-              if (as.ownerExpiry % 15 === 0) showNotif(`👑 ค่าผ่านทาง ${as.asset.emoji} +${fmt(toll)}`, "#c084fc");
-            }
-            setAuction({...as});
-          }
-        }
-      }
-      // ── BOX STOCK RESTOCK (every 120s) ──
-      {
-        boxTimerR.current--;
+      boxTimerR.current--;
         setBoxTimer(boxTimerR.current);
         if (boxTimerR.current <= 0) {
           boxTimerR.current = 120;
@@ -3901,9 +3631,8 @@ function GameScreen({ session, initPlayers, client, onEnd }) {
           showNotif(`📦 กล่องสุ่มรีสต็อก! การ์ด×${ns.card} ฟิก×${ns.figure} ไอดี×${ns.gameid}`, "#fbbf24");
           _snd.play('event');
         }
-      }
     }, 1000);
-    return () => { clearInterval(id); if (racingSubIdR.current) { clearInterval(racingSubIdR.current); racingSubIdR.current = null; } };
+    return () => clearInterval(id);
   }, [showNotif, syncCash, session, gameAssets]);
 
   const doBuy = (q) => {
@@ -4012,39 +3741,20 @@ function GameScreen({ session, initPlayers, client, onEnd }) {
     setModal(null);
   };
 
+  // ── SOLO RACE callbacks (passed to HorseRaceWatchModal) ──
   const doRaceBet = (horseIdx, amount) => {
-    const rs = raceR.current;
-    if (rs.phase !== 'betting') { showNotif("⛔ ปิดรับแล้ว","#f87171"); return; }
-    if (onlineRef.current && client?.ok) {
-      client.send("RACE_BET", { horse: horseIdx, amount });
-      return; // server validates, deducts cash, and sends RACE_BET_RESULT
-    }
-    if (cashR.current < amount) { showNotif("❌ เงินไม่พอ","#f87171"); return; }
-    if (rs.playerBet) cashR.current += rs.playerBet.amount; // refund previous
+    if (cashR.current < amount) { showNotif("❌ เงินไม่พอ","#f87171"); return false; }
     cashR.current -= amount; syncCash();
-    raceR.current.playerBet = {horse: horseIdx, amount};
-    setRace({...raceR.current});
-    setRacePickedHorse(horseIdx);
-    showNotif(`🐎 เดิมพัน ${HORSE_EMOJIS[horseIdx]} ${HORSE_NAMES[horseIdx]} ฿${amount.toLocaleString()}`, HORSE_COLORS[horseIdx]);
+    _snd.play('buy');
+    showNotif(`🐎 ${HORSE_EMOJIS[horseIdx]} ${HORSE_NAMES[horseIdx]} — ฿${amount.toLocaleString()}`, HORSE_COLORS[horseIdx]);
+    return true;
   };
-
-  const doBid = (amount) => {
-    const aState = auctionR.current;
-    if (!aState || aState.phase !== 'bidding') return;
-    if (amount <= aState.currentBid) { showNotif(`❌ ต้อง Bid มากกว่า ฿${aState.currentBid.toLocaleString()}`,"#f87171"); return; }
-    if (onlineRef.current && client?.ok) {
-      client.send("AUCTION_BID", { amount });
-      return; // server validates, refunds previous bidder, sends AUCTION_BID_RESULT + AUCTION_BID_UPDATE
-    }
-    if (cashR.current < amount) { showNotif("❌ เงินไม่พอ","#f87171"); return; }
-    if (aState.currentBidder === "player") cashR.current += aState.currentBid; // refund my prev bid
-    cashR.current -= amount; syncCash();
-    auctionR.current.currentBid = amount;
-    auctionR.current.currentBidder = "player";
-    setAuction({...auctionR.current});
-    setBidInput(amount + 200);
-    showNotif(`🔨 Bid ฿${amount.toLocaleString()} — คุณนำอยู่!`, "#c084fc");
+  const doRaceWin = (payout) => {
+    cashR.current += payout; syncCash();
+    _snd.play('jackpot'); setConfetti(true); setTimeout(()=>setConfetti(false),3000);
+    showNotif(`🏆 +฿${payout.toLocaleString()} (×2.4)`, "#fbbf24");
   };
+  const doRaceLose = () => { _snd.play('bust'); showNotif("💔 ม้าแพ้","#f87171"); };
 
   const openGamble = (id, bet) => {
     if (cashR.current < bet) { showNotif(`❌ เงินสดไม่พอ (ต้องการ ${fmt(bet)})`,"#f87171"); return; }
@@ -4290,74 +4000,16 @@ const myRank = allP.findIndex(p=>p.isMe)+1;
       )}
 
       {/* ── RACE BANNER ── */}
-      {(race.phase==='break'||race.phase==='betting'||race.phase==='racing'||race.phase==='result') && (
-        <div onClick={()=>setModal('horserace')} style={{margin:"5px 14px 0",padding:"10px 14px",borderRadius:11,
-          background:"linear-gradient(135deg,#78350f12,#fbbf2408)",border:"1px solid #fbbf2430",
-          cursor:"pointer",animation:"event-banner-in 0.4s cubic-bezier(0.34,1.56,0.64,1)"}}>
-          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-            <div>
-              <div style={{fontSize:8,letterSpacing:3,color:"#fbbf2466",marginBottom:1}}>🏇 HORSE RACE</div>
-              <div style={{color:race.phase==='break'?"#ffffff55":"#fbbf24",fontWeight:700,fontSize:12}}>
-                {race.phase==='break'?`แข่งม้าใน ${race.breakTick}s`:
-                 race.phase==='betting'?`เปิดเดิมพัน — ${race.betTick}s รีบเลย!`:
-                 race.phase==='racing'?'กำลังแข่ง! 🏁':
-                 race.winner>=0?`${HORSE_EMOJIS[race.winner]} ${HORSE_NAMES[race.winner]} ชนะ!`:'ผลการแข่ง'}
-              </div>
-            </div>
-            <div style={{textAlign:"right",flexShrink:0,marginLeft:8}}>
-              {race.phase==='break'&&<div style={{fontSize:9,color:"#ffffff22"}}>แตะเพื่อดู →</div>}
-              {race.phase==='betting'&&!race.playerBet&&<div style={{fontSize:9,color:"#fbbf2466"}}>แตะเพื่อเดิมพัน →</div>}
-              {race.phase==='betting'&&race.playerBet&&<div style={{fontSize:9,color:HORSE_COLORS[race.playerBet.horse],fontWeight:700}}>
-                {HORSE_EMOJIS[race.playerBet.horse]} ฿{race.playerBet.amount?.toLocaleString()}
-              </div>}
-              {race.phase==='racing'&&race.playerBet&&<div style={{fontSize:9,color:"#fbbf2466"}}>ลุ้น ×2.4</div>}
-              {race.phase==='result'&&race.winner>=0&&race.playerBet&&<div style={{fontSize:10,fontWeight:700,
-                color:race.playerBet.horse===race.winner?"#4ade80":"#f87171"}}>
-                {race.playerBet.horse===race.winner?`🏆 +฿${(Math.round(race.playerBet.amount*2.4)-race.playerBet.amount).toLocaleString()}`:'💔 เสียเดิมพัน'}
-              </div>}
-            </div>
+      <div onClick={()=>setModal('horserace')} style={{margin:"5px 14px 0",padding:"10px 14px",borderRadius:11,
+        background:"linear-gradient(135deg,#78350f12,#fbbf2408)",border:"1px solid #fbbf2430",cursor:"pointer"}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+          <div>
+            <div style={{fontSize:8,letterSpacing:3,color:"#fbbf2466",marginBottom:1}}>🏇 HORSE RACE</div>
+            <div style={{color:"#fbbf24",fontWeight:700,fontSize:12}}>แข่งม้าเดิมพัน — กดแข่งเลย!</div>
           </div>
+          <div style={{fontSize:9,color:"#fbbf2466"}}>ชนะ ×2.4 →</div>
         </div>
-      )}
-
-      {/* ── AUCTION BANNER ── */}
-      {auction && (
-        <div style={{margin:"5px 14px",padding:"10px 14px",borderRadius:11,
-          background:"linear-gradient(135deg,#4c1d9512,#c084fc08)",border:"1px solid #c084fc30",
-          animation:"event-banner-in 0.4s cubic-bezier(0.34,1.56,0.64,1)"}}>
-          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
-            <div>
-              <div style={{fontSize:8,letterSpacing:3,color:"#c084fc66",marginBottom:1}}>🔨 MONOPOLY AUCTION</div>
-              <div style={{color:"#c084fc",fontWeight:700,fontSize:12}}>
-                {auction.asset?.emoji}{auction.asset?.name}
-                {auction.phase==='bidding'?` — ประมูล (${auction.window}s)`:` — ผู้ครอง ${auction.window||auction.ownerExpiry}s`}
-              </div>
-            </div>
-            <div style={{textAlign:"right"}}>
-              {auction.phase==='bidding'&&<div style={{fontSize:11,fontWeight:700,color:auction.currentBidder==="player"?"#4ade80":"#f87171"}}>
-                ฿{auction.currentBid.toLocaleString()} {auction.currentBidder==="player"?"(คุณ)":auction.currentBidder?`(${auction.currentBidder})`:"(ไม่มี)"}
-              </div>}
-              {auction.phase==='owned'&&<div style={{fontSize:10,color:auction.ownerNick===session.nick?"#c084fc":"#ffffff44"}}>
-                👑 {auction.ownerNick===session.nick?"คุณ!":auction.ownerNick}
-              </div>}
-            </div>
-          </div>
-          {auction.phase==='bidding' && (
-            <div style={{display:"flex",gap:5,alignItems:"center",flexWrap:"wrap"}}>
-              {[auction.currentBid+200,auction.currentBid+500,auction.currentBid+1000].filter(v=>v<=(onlineRef.current?cash+bank:cashR.current)+(auction.currentBidder==="player"?auction.currentBid:0)).map(v=>(
-                <button key={v} onClick={()=>doBid(v)} style={{
-                  padding:"5px 9px",borderRadius:7,cursor:"pointer",fontFamily:G.font,fontSize:10,fontWeight:700,
-                  border:"1px solid #c084fc33",background:"#c084fc10",color:"#c084fc",
-                }}>Bid ฿{v.toLocaleString()}</button>
-              ))}
-              {auction.currentBidder!=="player"&&<span style={{fontSize:9,color:"#ffffff33"}}>หรือพิมพ์จำนวน</span>}
-            </div>
-          )}
-          {auction.phase==='owned'&&auction.ownerNick===session.nick&&(
-            <div style={{fontSize:9,color:"#c084fc88",marginTop:4}}>👑 เก็บค่าผ่านทางอัตโนมัติทุก 5 วิ · เหลือ {auction.ownerExpiry}s</div>
-          )}
-        </div>
-      )}
+      </div>
 
       {notif && (
         <div key={notif.id} style={{
@@ -5091,36 +4743,19 @@ const myRank = allP.findIndex(p=>p.isMe)+1;
               <GH color="#fbbf24">🏇 Horse Race</GH>
               <div style={{background:"#ffffff05",borderRadius:10,padding:"12px 14px",border:"1px solid #ffffff0a",marginBottom:8}}>
                 {[
-                  {t:"ทุก 90 วิ",d:"Race ใหม่เริ่มต้น — ประกาศ 5 asset เข้าแข่ง"},
-                  {t:"15 วิ",d:"ช่วงเดิมพัน — เลือก asset + จำนวนเงิน"},
-                  {t:"30 วิ",d:"Race เริ่ม — ดูราคาขึ้นลงแบบ real-time"},
-                  {t:"ชนะ",d:"Asset ที่ % ขึ้นมากสุด = ชนะ → ได้ ×2.4 ของเงินเดิม"},
-                  {t:"แพ้",d:"เสียเงินที่วางไว้ทั้งหมด"},
+                  {t:"กดเมื่อไหรก็ได้",d:"แตะปุ่มแข่งม้าหรือ banner สีทองในหน้าเกม"},
+                  {t:"เลือกม้า",d:"เลือก 1 ใน 5 ม้า — NPC อื่นก็เดิมพันด้วย"},
+                  {t:"เดิมพัน",d:"กดจำนวนเงินที่ต้องการ → แข่งเลยทันที"},
+                  {t:"ชนะ",d:"ม้าที่เลือกถึงเส้นชัยก่อน → ได้ ×2.4 ของเงินเดิม"},
+                  {t:"แข่งอีก",d:"ดูผลแล้วกด 'แข่งอีก!' ได้ทันที"},
                 ].map(({t,d})=>(
                   <div key={t} style={{display:"flex",gap:10,marginBottom:7,alignItems:"flex-start"}}>
-                    <div style={{fontSize:9,fontWeight:700,color:"#fbbf24",minWidth:50,flexShrink:0}}>{t}</div>
+                    <div style={{fontSize:9,fontWeight:700,color:"#fbbf24",minWidth:70,flexShrink:0}}>{t}</div>
                     <div style={{fontSize:10,color:"#ffffff55"}}>{d}</div>
                   </div>
                 ))}
               </div>
-              <Tip>ถ้ามี Event "Crypto Bull Run" กำลัง active อยู่ → BTC/ETH/SOL มักชนะ Race !</Tip>
-
-              <GH color="#c084fc">🔨 Monopoly Auction</GH>
-              <div style={{background:"#ffffff05",borderRadius:10,padding:"12px 14px",border:"1px solid #ffffff0a",marginBottom:8}}>
-                {[
-                  {t:"ทุก 2 นาที",d:"Asset สุ่ม 1 ตัวขึ้นประมูล — ประกาศ 20 วิ"},
-                  {t:"ประมูล",d:"Bid ราคาสูงกว่าคนอื่น — Bot ก็ Bid เหมือนกัน"},
-                  {t:"ชนะ",d:"เงินที่ Bid หายไป แลกกับ 'สิทธิ์ผูกขาด' 60 วิ"},
-                  {t:"ผลตอบแทน",d:"รับค่าผ่านทางอัตโนมัติทุก 5 วิ (~1.8% ของราคา asset)"},
-                  {t:"หมดอายุ",d:"60 วิผ่านไป → สิทธิ์หมด เริ่มนับ auction ใหม่"},
-                ].map(({t,d})=>(
-                  <div key={t} style={{display:"flex",gap:10,marginBottom:7,alignItems:"flex-start"}}>
-                    <div style={{fontSize:9,fontWeight:700,color:"#c084fc",minWidth:60,flexShrink:0}}>{t}</div>
-                    <div style={{fontSize:10,color:"#ffffff55"}}>{d}</div>
-                  </div>
-                ))}
-              </div>
-              <Tip color="#c084fc">ประมูลสิทธิ์ asset ที่ราคาสูง (เช่น MALL, BTC) → ค่าผ่านทางมากขึ้น!</Tip>
+              <Tip>แข่งม้าใช้เงินสด — ฝากเงินธนาคารไว้เยอะๆ ก่อนกดแข่ง เพื่อลดความเสี่ยง</Tip>
 
               {cfg.cards && <>
                 <GH color="#38bdf8">🃏 Power Cards (Casual Mode)</GH>
@@ -5191,7 +4826,7 @@ const myRank = allP.findIndex(p=>p.isMe)+1;
       {modal==="plinko"    && <PlinkoModal    key={plinkoKey} onResult={handleGambleResult} onClose={()=>setModal(null)} onPlayAgain={handlePlinkoPlayAgain} bet={activeBetR.current||GAMBLE_COSTS.plinko}/>}
       {modal==="mines"     && <MinesModal     onResult={handleGambleResult} onClose={()=>cancelGamble("mines")}     bet={activeBetR.current||GAMBLE_COSTS.mines}/>}
       {modal==="blackjack" && <BlackjackModal onResult={handleGambleResult} onClose={()=>cancelGamble("blackjack")} onDoubleBet={handleBlackjackDouble} bet={activeBetR.current||GAMBLE_COSTS.blackjack} maxCash={cash}/>}
-      {modal==="horserace" && <HorseRaceWatchModal raceR={raceR} pickedHorse={racePickedHorse} onPickHorse={setRacePickedHorse} onBet={doRaceBet} cash={cash} onClose={()=>setModal(null)}/>}
+      {modal==="horserace" && <HorseRaceWatchModal cash={cash} onBet={doRaceBet} onWin={doRaceWin} onLose={doRaceLose} onClose={()=>setModal(null)}/>}
       {betSelectId && <BetSelectorModal gameId={betSelectId} cash={cash} onConfirm={(b)=>openGamble(betSelectId,b)} onClose={()=>setBetSelectId(null)}/>}
 
       {/* GACHA ANIMATION MODAL */}
@@ -5225,7 +4860,7 @@ function App() {
         // auto-rejoin if we lost connection mid-join and server restarted
         if (pendingJoinRef.current) {
           const r = pendingJoinRef.current;
-          client.join(r.nick, r.code, r.mode, r.endMode, r.target, r.duration);
+          client.join(r.nick, r.code, r.mode, r.endMode, r.target, r.duration, r.host, r.startCash);
         }
       }
       if (msg.type === "OFFLINE") { setWsReady(false); setWsError("ไม่สามารถเชื่อมต่อ server ได้ — เล่น offline แทน"); }
@@ -5241,6 +4876,17 @@ function App() {
           setWsError("การเชื่อมต่อขาด — ห้องหลุดแล้ว กรุณาเข้าร่วมใหม่");
         } else {
           setWsError("หลุดการเชื่อมต่อ กำลัง reconnect...");
+        }
+      }
+
+      if (msg.type === "ERROR") {
+        // server rejected the join (room not found, room full, etc.)
+        if (screenRef.current === "joining") {
+          pendingJoinRef.current = null;
+          screenRef.current = "lobby";
+          setScreen("lobby");
+          setSession(null);
+          setWsError(`❌ ${msg.msg || "เกิดข้อผิดพลาด"}`);
         }
       }
 
@@ -5284,7 +4930,7 @@ const handleLobbyStart = (s) => {
   if (ONLINE_MODE && clientRef.current?.ok) {
     setSession(s);
     pendingJoinRef.current = s; // store for auto-rejoin if connection drops before JOINED
-    clientRef.current.join(s.nick, s.code, s.mode, s.endMode, s.target, s.duration);
+    clientRef.current.join(s.nick, s.code, s.mode, s.endMode, s.target, s.duration, s.host, s.startCash);
     screenRef.current = "joining";
     setScreen("joining"); // wait for server JOINED confirmation before entering room
   } else {
