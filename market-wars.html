@@ -99,37 +99,42 @@ const ASSETS = [
 ];
 
 const MODES = {
-  casual:{ name:"Casual",       icon:"⚡", dur:300, assetN:6, evInt:[18,32],  start:20000, cards:true  },
-  deep:  { name:"Deep Strategy",icon:"🧠", dur:900, assetN:9, evInt:[35,60], start:20000, cards:false },
+  casual:{ name:"Casual",       icon:"⚡", dur:300, assetN:6, evInt:[30,50], start:20000 },
+  deep:  { name:"Deep Strategy",icon:"🧠", dur:900, assetN:9, evInt:[45,75], start:20000 },
 };
 
+// hypeEff: กระทบ hype index ทันทีเมื่อ event นี้ติด (คูณเข้า index)
+// careerMult: { careerId: multiplier } — ใช้คูณรายได้อาชีพขณะ event นี้ active
 const EVENTS = [
-  { id:"fed",   title:"🏦 Fed ขึ้นดอกเบี้ย",   eff:{stock:-0.08,crypto:-0.04,realestate:-0.06,gold:0.06,commodity:-0.03}, dur:15 },
-  { id:"bull",  title:"🚀 Crypto Bull Run!",    eff:{stock:0.02,crypto:0.20,realestate:0,gold:0,commodity:0},             dur:15 },
-  { id:"tech",  title:"💻 Tech Boom",           eff:{stock:0.14,crypto:0.06,realestate:0.02,gold:-0.02,commodity:0},      dur:15 },
-  { id:"crash", title:"📉 วิกฤตเศรษฐกิจ",      eff:{stock:-0.12,crypto:-0.15,realestate:-0.08,gold:0.15,commodity:-0.05},dur:20 },
-  { id:"prop",  title:"🏘️ อสังหาฯบูม",          eff:{stock:0.01,crypto:0,realestate:0.18,gold:0,commodity:0},            dur:15 },
-  { id:"dump",  title:"🐋 Whale Dump!",         eff:{stock:-0.02,crypto:-0.22,realestate:0,gold:0.04,commodity:0},        dur:10 },
-  { id:"ipo",   title:"📈 IPO ฟีเวอร์",         eff:{stock:0.12,crypto:0.03,realestate:0,gold:0,commodity:0},            dur:15 },
-  { id:"inf",   title:"💸 เงินเฟ้อ",            eff:{stock:-0.04,crypto:0.05,realestate:0.10,gold:0.12,commodity:0.08},  dur:15 },
-  { id:"war",   title:"⚔️ สงครามปะทุ!",         eff:{stock:-0.10,crypto:-0.05,realestate:-0.04,gold:0.22,commodity:0.28},dur:20 },
-  { id:"elon",  title:"🤖 Elon Tweet Crypto!",  eff:{stock:0.03,crypto:0.32,realestate:0,gold:-0.02,commodity:0},        dur:8  },
-  { id:"flood", title:"🌊 น้ำท่วมใหญ่!",        eff:{stock:-0.05,crypto:0,realestate:-0.16,gold:0.03,commodity:0.10},    dur:15 },
-  { id:"oil",   title:"🛢 น้ำมันพุ่งสูง!",       eff:{stock:-0.06,crypto:-0.02,realestate:0.02,gold:0.05,commodity:0.25},dur:15 },
-  { id:"goldB", title:"🥇 ทองทะลุ All-Time!",   eff:{stock:0.01,crypto:0.02,realestate:0.04,gold:0.28,commodity:0.06},  dur:12 },
-  { id:"rate",  title:"✂️ Fed ลดดอกเบี้ย!",     eff:{stock:0.10,crypto:0.08,realestate:0.13,gold:0.06,commodity:0.03},  dur:15 },
-  { id:"hack",  title:"👾 Exchange ถูกแฮก!",    eff:{stock:-0.03,crypto:-0.28,realestate:0,gold:0.10,commodity:0},       dur:10 },
-  { id:"boom",  title:"🇹🇭 ไทยบูม! ศก.พุ่ง",    eff:{stock:0.16,crypto:0.05,realestate:0.20,gold:0.02,commodity:0.08},  dur:15 },
-  { id:"drght", title:"🌵 ภัยแล้ง! ข้าวแพง",    eff:{stock:-0.02,crypto:0,realestate:0,gold:0,commodity:0.30},          dur:15 },
-  { id:"nuke",  title:"☢️ วิกฤตนิวเคลียร์!",    eff:{stock:-0.18,crypto:-0.10,realestate:-0.12,gold:0.30,commodity:0.15},dur:20},
-];
-
-const PCARDS = [
-  { id:"freeze",  name:"❄️ Freeze",   color:"#38bdf8" },
-  { id:"squeeze", name:"⚡ Squeeze",  color:"#c084fc" },
-  { id:"intel",   name:"🕵️ Intel",    color:"#fbbf24" },
-  { id:"copy",    name:"📋 Copy",     color:"#4ade80" },
-  { id:"bomb",    name:"💣 Sabotage", color:"#f87171" },
+  // ── SPIKE 20s ──
+  { id:"whale",  title:"🐋 เซียนใหญ่เทขายหนัก!",        eff:{stock:-0.01,crypto:-0.22,realestate:0,   gold:0.03,commodity:0   }, hypeEff:null,                         careerMult:null,                               dur:20 },
+  { id:"hack",   title:"👾 ตลาดคริปโตถูกแฮก!",           eff:{stock:-0.02,crypto:-0.25,realestate:0,   gold:0.08,commodity:0   }, hypeEff:{gameid:1.5},                  careerMult:null,                               dur:20 },
+  { id:"elon",   title:"🤖 เศรษฐีดังทวีตเงินดิจิทัล!",  eff:{stock:0.02, crypto:0.22, realestate:0,   gold:-0.02,commodity:0  }, hypeEff:null,                         careerMult:{casino:1.5},                       dur:20 },
+  { id:"figureS",title:"📦 โมเดลรุ่นพิเศษวางขาย!",       eff:{stock:0,    crypto:0,    realestate:0.02,gold:0,   commodity:0   }, hypeEff:{figure:2.5},                  careerMult:null,                               dur:20 },
+  { id:"fake",   title:"🚨 ของปลอมล้นตลาด!",              eff:{stock:-0.03,crypto:0,    realestate:0,   gold:0,   commodity:0   }, hypeEff:{card:0.35},                   careerMult:null,                               dur:20 },
+  { id:"esport", title:"🎮 ศึกเกมชิงแชมป์โลก!",           eff:{stock:0.03, crypto:0.03, realestate:0,   gold:0,   commodity:0   }, hypeEff:{gameid:2.2},                  careerMult:{casino:2.0},                       dur:20 },
+  // ── MACRO 30s ──
+  { id:"fed",    title:"🏦 ธนาคารกลางขึ้นดอกเบี้ย",       eff:{stock:-0.08,crypto:-0.04,realestate:-0.06,gold:0.06,commodity:-0.03}, hypeEff:null,                      careerMult:null,                               dur:30 },
+  { id:"rate",   title:"✂️ ธนาคารกลางลดดอกเบี้ย",         eff:{stock:0.10, crypto:0.08, realestate:0.13,gold:0.06,commodity:0.03 }, hypeEff:null,                      careerMult:null,                               dur:30 },
+  { id:"inf",    title:"💸 เงินเฟ้อพุ่ง!",                 eff:{stock:-0.04,crypto:0.05, realestate:0.10,gold:0.12,commodity:0.08 }, hypeEff:null,                      careerMult:{vendor:1.6},                       dur:30 },
+  { id:"bull",   title:"🚀 คริปโตบูมครั้งใหม่!",           eff:{stock:0.02, crypto:0.20, realestate:0,   gold:0,   commodity:0   }, hypeEff:{gameid:1.6},                careerMult:{casino:1.5},                       dur:30 },
+  { id:"tech",   title:"💻 เทคโนโลยีบูม",                  eff:{stock:0.14, crypto:0.06, realestate:0.02,gold:-0.02,commodity:0  }, hypeEff:null,                      careerMult:null,                               dur:30 },
+  { id:"ipo",    title:"📈 หุ้น IPO ฟีเวอร์",              eff:{stock:0.12, crypto:0.03, realestate:0,   gold:0,   commodity:0   }, hypeEff:null,                      careerMult:null,                               dur:30 },
+  { id:"prop",   title:"🏘️ อสังหาฯ บูม",                   eff:{stock:0.01, crypto:0,    realestate:0.18,gold:0,   commodity:0   }, hypeEff:null,                      careerMult:{mechanic:1.6},                     dur:30 },
+  { id:"flood",  title:"🌊 น้ำท่วมใหญ่!",                  eff:{stock:-0.05,crypto:0,    realestate:-0.16,gold:0.03,commodity:0.10}, hypeEff:null,                     careerMult:{vendor:1.8,rider:0.7},             dur:30 },
+  { id:"oil",    title:"🛢 ราคาน้ำมันพุ่งสูง!",             eff:{stock:-0.06,crypto:-0.02,realestate:0.02,gold:0.05,commodity:0.25}, hypeEff:null,                     careerMult:{rider:1.5,vendor:1.3},             dur:30 },
+  { id:"cardH",  title:"🃏 กระแสการ์ดร้อนแรง!",            eff:{stock:0,    crypto:0,    realestate:0,   gold:0,   commodity:0   }, hypeEff:{card:2.0},                careerMult:null,                               dur:30 },
+  { id:"figH",   title:"🎎 ฟิกฯ Limited วางขาย!",          eff:{stock:0,    crypto:0,    realestate:0.01,gold:0,   commodity:0   }, hypeEff:{figure:1.8},              careerMult:null,                               dur:30 },
+  { id:"gameH",  title:"🎮 เปิดตัวเกมใหม่!",               eff:{stock:0.03, crypto:0.02, realestate:0,   gold:0,   commodity:0   }, hypeEff:{gameid:1.7},              careerMult:{casino:1.8},                       dur:30 },
+  // ── MEGA 35s ──
+  { id:"crash",  title:"📉 วิกฤตเศรษฐกิจ",                 eff:{stock:-0.12,crypto:-0.15,realestate:-0.08,gold:0.15,commodity:-0.05}, hypeEff:{card:0.5,figure:0.55,gameid:0.5}, careerMult:null,                    dur:35 },
+  { id:"war",    title:"⚔️ สงครามปะทุ!",                    eff:{stock:-0.10,crypto:-0.05,realestate:-0.04,gold:0.22,commodity:0.28}, hypeEff:null,                    careerMult:{mechanic:2.0,rider:1.8,vendor:0.6},dur:35 },
+  { id:"goldB",  title:"🥇 ทองทะลุ All-Time!",              eff:{stock:0.01, crypto:0.02, realestate:0.04,gold:0.28,commodity:0.06}, hypeEff:null,                    careerMult:null,                               dur:35 },
+  { id:"drght",  title:"🌵 ภัยแล้ง! ราคาข้าวพุ่ง",          eff:{stock:-0.02,crypto:0,    realestate:0,   gold:0,   commodity:0.30}, hypeEff:null,                    careerMult:{vendor:2.0,rider:1.4},             dur:35 },
+  { id:"boom",   title:"🇹🇭 เศรษฐกิจไทยบูม!",               eff:{stock:0.16, crypto:0.05, realestate:0.20,gold:0.02,commodity:0.08}, hypeEff:{card:1.4,figure:1.3,gameid:1.4}, careerMult:{vendor:1.5,rider:1.3,mechanic:1.4,casino:1.3}, dur:35 },
+  { id:"nuke",   title:"☢️ วิกฤตนิวเคลียร์!",               eff:{stock:-0.18,crypto:-0.10,realestate:-0.12,gold:0.30,commodity:0.15}, hypeEff:{card:0.4,figure:0.45,gameid:0.35}, careerMult:{mechanic:2.5},        dur:35 },
+  { id:"cardD",  title:"🃏 การ์ดล้นตลาด ดิ่งหนัก!",         eff:{stock:-0.02,crypto:0,    realestate:0,   gold:0,   commodity:0   }, hypeEff:{card:0.3},               careerMult:null,                               dur:35 },
+  { id:"figD",   title:"🎎 โรงงานฟิกฯ ทุ่มตลาด!",           eff:{stock:0,    crypto:0,    realestate:0,   gold:0,   commodity:0   }, hypeEff:{figure:0.35},             careerMult:null,                               dur:35 },
 ];
 
 const BOT_NAMES = ["AlgoBot🤖","TradeMaster💼","CryptoKing👑","WallSt🐂","StonkGod📊","DeFi🦊"];
@@ -201,6 +206,13 @@ function genHypeItem(type){
   const bp=rar.bp[0]+Math.floor(Math.random()*(rar.bp[1]-rar.bp[0]));
   return {id:`h${Date.now()}${Math.random().toString(36).slice(2,5)}`,type,name,emoji,rarity:rar.r,rarityColor:rar.c,bp,listed:false,listPrice:null};
 }
+const CAREERS = [
+  { id:'vendor',   name:'🍜 แม่ค้า',      cost:3000,  color:'#fb923c', desc:'รับออเดอร์ทำอาหาร' },
+  { id:'rider',    name:'🚚 ไรเดอร์',      cost:12000, color:'#60a5fa', desc:'ส่งของเลือกเส้นทาง' },
+  { id:'mechanic', name:'🔧 ช่างซ่อม',     cost:40000, color:'#a78bfa', desc:'ซ่อมอุปกรณ์ก่อนหมดเวลา' },
+  { id:'casino',   name:'🎰 เจ้าของบ่อน',  cost:70000, color:'#f59e0b', desc:'ตั้ง Odds รับเงิน NPC' },
+];
+
 const BOT_CHAT_POOL = [
   "ซื้อแล้ว รอขึ้น 📈","กราฟน่าสนใจมาก","HODL เดี๋ยวก็กลับ","ขาย 50% ก่อนดีกว่า",
   "ทองขึ้นแล้ว รีบซื้อ!","Crypto แดงหมด 😭","ใครอยากได้การ์ดมั้ย?",
@@ -1595,6 +1607,263 @@ function BlackjackModal({ onResult, onClose, onDoubleBet, bet=300, maxCash=Infin
 const HORSE_NAMES = ["Thunder","Lucky","Blaze","Storm","Flash"];
 const HORSE_EMOJIS = ["🐴","🐎","🦄","🏇","🎠"];
 const HORSE_COLORS = ["#fbbf24","#4ade80","#c084fc","#38bdf8","#f87171"];
+// ── CAREER MINI-GAMES ──
+
+function VendorMiniGame({ onResult }) {
+  const FOODS = ['🍛','🍜','🧋','🍱','🥗','🍣','🍝','🥪'];
+  const [orders] = useState(() => [...FOODS].sort(()=>Math.random()-0.5).slice(0,3));
+  const [choices] = useState(() => {
+    const rest = FOODS.filter(f=>!orders.includes(f)).sort(()=>Math.random()-0.5).slice(0,3);
+    return [...orders,...rest].sort(()=>Math.random()-0.5);
+  });
+  const [tapped, setTapped] = useState(new Set());
+  const [timeLeft, setTimeLeft] = useState(5);
+  const [result, setResult] = useState(null);
+  const tappedRef = useRef(new Set());
+  const doneRef = useRef(false);
+
+  const finish = useCallback((cnt) => {
+    if (doneRef.current) return;
+    doneRef.current = true;
+    const earn = cnt>=3?450:cnt>=2?200:cnt>=1?60:-80;
+    setResult({cnt, earn});
+    setTimeout(()=>onResult(earn), 1000);
+  }, [onResult]);
+
+  useEffect(()=>{
+    const iv = setInterval(()=>setTimeLeft(t=>{
+      if(t<=1){ clearInterval(iv); finish(orders.filter(o=>tappedRef.current.has(o)).length); return 0; }
+      return t-1;
+    }),1000);
+    return ()=>clearInterval(iv);
+  },[finish, orders]);
+
+  const tap = (food) => {
+    if(doneRef.current||tappedRef.current.has(food)) return;
+    tappedRef.current = new Set([...tappedRef.current, food]);
+    setTapped(new Set(tappedRef.current));
+    if(tappedRef.current.size>=3) finish(orders.filter(o=>tappedRef.current.has(o)).length);
+  };
+
+  return (
+    <Modal onClose={()=>finish(orders.filter(o=>tappedRef.current.has(o)).length)} title="🍜 แม่ค้า — รับออเดอร์">
+      <div style={{textAlign:'center',marginBottom:14}}>
+        <div style={{fontSize:9,color:'#ffffff33',marginBottom:8,letterSpacing:2}}>ออเดอร์ที่รอ</div>
+        <div style={{display:'flex',justifyContent:'center',gap:16,fontSize:34,marginBottom:10}}>
+          {orders.map((f,i)=><span key={i} style={{opacity:tapped.has(f)?0.2:1,transition:'opacity .2s',filter:tapped.has(f)?'grayscale(1)':undefined}}>{f}</span>)}
+        </div>
+        {!result
+          ? <div style={{fontSize:14,fontWeight:700,color:timeLeft<=2?'#f87171':'#4ade80'}}>⏱ {timeLeft}</div>
+          : <div style={{fontSize:14,fontWeight:700,color:result.earn>0?'#4ade80':'#f87171',animation:'notif-in .3s ease'}}>
+              {result.cnt}/3 ถูก → {result.earn>0?'+':''}{result.earn.toLocaleString()}฿
+            </div>
+        }
+      </div>
+      <div style={{display:'flex',flexWrap:'wrap',gap:8,justifyContent:'center'}}>
+        {choices.map((f,i)=>(
+          <button key={i} onClick={()=>tap(f)} style={{
+            fontSize:30,padding:'10px 14px',borderRadius:14,cursor:doneRef.current?'default':'pointer',fontFamily:G.font,
+            border:`2px solid ${tapped.has(f)?(orders.includes(f)?'#4ade8080':'#f8717160'):'#ffffff15'}`,
+            background:tapped.has(f)?(orders.includes(f)?'#4ade8018':'#f8717118'):'#ffffff05',transition:'all .1s',
+          }}>{f}</button>
+        ))}
+      </div>
+    </Modal>
+  );
+}
+
+function RiderMiniGame({ onResult }) {
+  const [picked, setPicked] = useState(null);
+  const [result, setResult] = useState(null);
+
+  const choose = (route) => {
+    if(picked) return;
+    setPicked(route);
+    let earn, fined=false;
+    if(route==='fast'){ fined=Math.random()<0.30; earn=fined?550:900; }
+    else if(route==='normal'){ earn=650; }
+    else { earn=380; }
+    setResult({route,earn,fined});
+    setTimeout(()=>onResult(earn),1100);
+  };
+
+  const ROUTES = [
+    {id:'fast',   label:'⚡ ทางด่วน',   sub:'฿900 · เสี่ยง 30% โดนปรับ −฿350', color:'#fbbf24'},
+    {id:'normal', label:'🛣️ ทางปกติ',   sub:'฿650 · ปลอดภัย',                   color:'#60a5fa'},
+    {id:'slow',   label:'🌿 ทางเลี่ยง', sub:'฿380 · ปลอดภัย 100%',              color:'#4ade80'},
+  ];
+
+  return (
+    <Modal onClose={()=>!picked&&onResult(0)} title="🚚 ไรเดอร์ — เลือกเส้นทาง">
+      {!result ? (
+        <div style={{display:'flex',flexDirection:'column',gap:10}}>
+          {ROUTES.map(r=>(
+            <button key={r.id} onClick={()=>choose(r.id)} style={{
+              padding:'14px 16px',borderRadius:12,cursor:'pointer',fontFamily:G.font,textAlign:'left',
+              border:`1px solid ${r.color}35`,background:`${r.color}08`,transition:'all .15s',
+            }}>
+              <div style={{fontWeight:700,fontSize:13,color:r.color,marginBottom:2}}>{r.label}</div>
+              <div style={{fontSize:9,color:'#ffffff44'}}>{r.sub}</div>
+            </button>
+          ))}
+        </div>
+      ) : (
+        <div style={{textAlign:'center',padding:'24px 0'}}>
+          <div style={{fontSize:36,marginBottom:8}}>{result.fined?'🚔':result.route==='fast'?'⚡':result.route==='normal'?'🛣️':'🌿'}</div>
+          <div style={{fontSize:11,color:'#ffffff55',marginBottom:8}}>{result.fined?'โดนปรับ −฿350!':'ส่งสำเร็จ!'}</div>
+          <div style={{fontSize:20,fontWeight:700,color:'#4ade80',animation:'notif-in .3s ease'}}>+฿{result.earn.toLocaleString()}</div>
+        </div>
+      )}
+    </Modal>
+  );
+}
+
+function MechanicMiniGame({ onResult }) {
+  const TOOLS = ['🔧','⚙️','🔩','🪛','🔌','💡'];
+  const [items, setItems] = useState(()=>TOOLS.map((e,i)=>({id:i,emoji:e,fixed:false})));
+  const [timeLeft, setTimeLeft] = useState(6);
+  const [finished, setFinished] = useState(false);
+  const fixedRef = useRef(0);
+  const doneRef  = useRef(false);
+
+  const finish = useCallback((cnt)=>{
+    if(doneRef.current) return;
+    doneRef.current=true;
+    setFinished(true);
+    const earn = cnt>=6?2200:cnt>0?350*cnt:-400;
+    setTimeout(()=>onResult(earn),900);
+  },[onResult]);
+
+  useEffect(()=>{
+    const iv=setInterval(()=>setTimeLeft(t=>{
+      if(t<=1){ clearInterval(iv); finish(fixedRef.current); return 0; }
+      return t-1;
+    }),1000);
+    return ()=>clearInterval(iv);
+  },[finish]);
+
+  const fix=(id)=>{
+    if(doneRef.current) return;
+    setItems(prev=>{
+      const next=prev.map(it=>it.id===id&&!it.fixed?{...it,fixed:true}:it);
+      const cnt=next.filter(it=>it.fixed).length;
+      fixedRef.current=cnt;
+      if(cnt>=6) finish(cnt);
+      return next;
+    });
+  };
+
+  return (
+    <Modal onClose={()=>finish(fixedRef.current)} title="🔧 ช่างซ่อม — ซ่อมทุกชิ้น!">
+      <div style={{textAlign:'center',marginBottom:12}}>
+        <div style={{fontSize:14,fontWeight:700,color:timeLeft<=2?'#f87171':'#4ade80'}}>⏱ {timeLeft} วิ</div>
+        <div style={{fontSize:9,color:'#ffffff33',marginTop:2}}>กดซ่อมให้ครบก่อนหมดเวลา · {fixedRef.current}/6</div>
+      </div>
+      <div style={{display:'flex',flexWrap:'wrap',gap:10,justifyContent:'center',marginBottom:12}}>
+        {items.map(it=>(
+          <button key={it.id} onClick={()=>fix(it.id)} style={{
+            fontSize:30,padding:14,borderRadius:14,fontFamily:G.font,
+            cursor:it.fixed||doneRef.current?'default':'pointer',
+            border:`2px solid ${it.fixed?'#4ade8060':'#f8717150'}`,
+            background:it.fixed?'#4ade8015':'#f8717110',
+            transform:it.fixed?'scale(0.88)':'scale(1)',
+            transition:'all .15s',filter:it.fixed?'grayscale(0.7)':undefined,
+          }}>{it.fixed?'✅':it.emoji}</button>
+        ))}
+      </div>
+      {finished&&<div style={{textAlign:'center',fontSize:12,fontWeight:700,
+        color:fixedRef.current>=4?'#4ade80':'#f87171',animation:'notif-in .3s ease'}}>
+        {fixedRef.current}/6 ชิ้น — {fixedRef.current>=6?'+฿2,200':fixedRef.current>0?`+฿${(350*fixedRef.current).toLocaleString()}`:'-฿400'}
+      </div>}
+    </Modal>
+  );
+}
+
+function CasinoMiniGame({ onResult }) {
+  const [oddsX10, setOddsX10] = useState(18); // 1.2–2.5 stored ×10
+  const [phase, setPhase] = useState('set'); // 'set'|'result'
+  const [npcRes, setNpcRes] = useState([]);
+  const [total, setTotal] = useState(0);
+  const NPC_NAMES = ['สมชาย','แดง','นุ่น','เต้','บาส','จุ๋ม','พิม','ไก่'];
+  const odds = oddsX10/10;
+  const npcCount = Math.max(1, Math.round(7-(odds-1.2)*2.6));
+  const winPct   = Math.round(Math.min(88,96/odds));
+
+  const openRound = () => {
+    const winProb = Math.min(0.88, 0.96/odds);
+    const results=[]; let net=0;
+    for(let i=0;i<npcCount;i++){
+      const bet=Math.round((200+Math.random()*600)/100)*100;
+      const wins=Math.random()<winProb;
+      const earn=wins?-Math.round(bet*(odds-1)):bet;
+      net+=earn;
+      results.push({name:NPC_NAMES[i%NPC_NAMES.length],bet,wins,earn:Math.round(earn)});
+    }
+    net=Math.round(net);
+    setNpcRes(results); setTotal(net); setPhase('result');
+    setTimeout(()=>onResult(net),2000);
+  };
+
+  return (
+    <Modal onClose={()=>phase==='set'&&onResult(0)} title="🎰 บ่อน — ตั้ง Odds">
+      {phase==='set' ? (
+        <div>
+          <div style={{marginBottom:14}}>
+            <div style={{display:'flex',justifyContent:'space-between',marginBottom:8}}>
+              <span style={{fontSize:11,color:'#ffffff66'}}>Odds:</span>
+              <span style={{fontSize:18,fontWeight:700,color:'#fbbf24'}}>{odds.toFixed(1)}×</span>
+            </div>
+            <input type="range" min={12} max={25} value={oddsX10} onChange={e=>setOddsX10(+e.target.value)}
+              style={{width:'100%',accentColor:'#fbbf24'}}/>
+            <div style={{display:'flex',justifyContent:'space-between',fontSize:8,color:'#ffffff33',marginTop:4}}>
+              <span>1.2× (NPC เยอะ)</span><span>2.5× (กำไร/หัวมาก)</span>
+            </div>
+          </div>
+          <div style={{background:'#ffffff05',borderRadius:10,padding:'10px 14px',marginBottom:14,border:'1px solid #ffffff08'}}>
+            <div style={{fontSize:9,color:'#ffffff33',marginBottom:6,letterSpacing:1}}>ประมาณการ</div>
+            <div style={{display:'flex',justifyContent:'space-between',fontSize:11,marginBottom:4}}>
+              <span style={{color:'#ffffff55'}}>NPC เข้าร่วม</span>
+              <span style={{color:'#fbbf24',fontWeight:700}}>{npcCount} คน</span>
+            </div>
+            <div style={{display:'flex',justifyContent:'space-between',fontSize:11}}>
+              <span style={{color:'#ffffff55'}}>โอกาส NPC ชนะ</span>
+              <span style={{color:'#f87171',fontWeight:700}}>{winPct}%</span>
+            </div>
+          </div>
+          <button onClick={openRound} style={{
+            width:'100%',padding:13,borderRadius:10,cursor:'pointer',fontFamily:G.font,
+            border:'1px solid #fbbf2440',background:'#fbbf2412',color:'#fbbf24',fontSize:13,fontWeight:700,
+          }}>🎲 เปิดรอบ!</button>
+        </div>
+      ) : (
+        <div>
+          <div style={{maxHeight:180,overflowY:'auto',marginBottom:12}}>
+            {npcRes.map((r,i)=>(
+              <div key={i} style={{display:'flex',justifyContent:'space-between',alignItems:'center',
+                padding:'7px 10px',borderRadius:8,marginBottom:5,
+                background:r.wins?'#f8717108':'#4ade8008',border:`1px solid ${r.wins?'#f8717120':'#4ade8020'}`}}>
+                <span style={{fontSize:11,color:'#ffffff88'}}>{r.name} · ฿{r.bet.toLocaleString()}</span>
+                <span style={{fontSize:12,fontWeight:700,color:r.wins?'#f87171':'#4ade80'}}>
+                  {r.wins?`−฿${Math.abs(r.earn).toLocaleString()}`:`+฿${r.earn.toLocaleString()}`}
+                </span>
+              </div>
+            ))}
+          </div>
+          <div style={{textAlign:'center',padding:'14px',borderRadius:12,
+            background:total>=0?'#4ade8015':'#f8717115',
+            border:`1px solid ${total>=0?'#4ade8040':'#f8717140'}`,animation:'modal-slide-up .3s ease'}}>
+            <div style={{fontSize:11,color:'#ffffff44',marginBottom:4}}>รายได้รอบนี้</div>
+            <div style={{fontSize:22,fontWeight:700,color:total>=0?'#4ade80':'#f87171'}}>
+              {total>=0?'+':''}{total.toLocaleString()}฿
+            </div>
+          </div>
+        </div>
+      )}
+    </Modal>
+  );
+}
+
+// ── HORSE RACE ──
 function HorseRaceWatchModal({ cash, onBet, onWin, onLose, onClose }) {
   const NPC_NICKS = ["สมชาย","นุ่น","แม็กซ์","จุ๋ม","เต้","บาส","พิม","เอิร์น"];
   const [phase, setPhase] = useState('pick'); // pick | racing | result
@@ -1625,18 +1894,23 @@ function HorseRaceWatchModal({ cash, onBet, onWin, onLose, onClose }) {
     const w = Math.floor(Math.random() * 5);
     winRef.current = w;
     posRef.current = [0,0,0,0,0];
-    velRef.current = HORSE_NAMES.map(() => 0.3 + Math.random() * 0.3);
+    // winner gets +0.09 base speed so it naturally leads — no teleport needed
+    velRef.current = HORSE_NAMES.map((_,i) => {
+      const base = 0.27 + Math.random() * 0.24;
+      return i === w ? base + 0.09 : base;
+    });
     setPlayerBet({horse, amount});
     setPositions([0,0,0,0,0]);
-    setVels([0.3,0.3,0.3,0.3,0.3]);
+    setVels([...velRef.current]);
     setFinalStretch(false);
     setPhase('racing');
     ivRef.current = setInterval(() => {
-      velRef.current = velRef.current.map(v => Math.max(0.1, Math.min(0.8, v + (Math.random()-0.5)*0.12)));
-      posRef.current = posRef.current.map((p,i) =>
-        Math.min(100, p + velRef.current[i] + (i===winRef.current && p>62 ? 0.16 : 0))
-      );
-      if (Math.max(...posRef.current) >= 94) posRef.current[winRef.current] = 100;
+      velRef.current = velRef.current.map((v,i) => {
+        const stretch = (i === winRef.current && posRef.current[i] > 50) ? 0.09 : 0;
+        return Math.max(0.10, Math.min(0.78, v + (Math.random()-0.5)*0.10 + stretch));
+      });
+      posRef.current = posRef.current.map((p,i) => Math.min(100, p + velRef.current[i]));
+      // no teleport — winner crosses finish line naturally
       const snap = [...posRef.current];
       const vsnap = [...velRef.current];
       setPositions(snap);
@@ -2628,13 +2902,11 @@ function AdminPanel({ onCmd }) {
               ))}
             </div>
 
-            {/* ── กระแส + มินิเกม ── */}
-            <div style={{fontSize:8,letterSpacing:2,color:"#ffffff22",marginBottom:2,marginTop:4}}>กระแส & มินิเกม</div>
+            {/* ── กระแส ── */}
+            <div style={{fontSize:8,letterSpacing:2,color:"#ffffff22",marginBottom:2,marginTop:4}}>กระแส</div>
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:4}}>
               <Btn label="📦 ไฮปขึ้น" cmd="ไฮปขึ้น" color="#c084fc"/>
               <Btn label="📦 ไฮปลง"   cmd="ไฮปลง"   color="#f87171"/>
-              <Btn label="🏇 เรซ"      cmd="เรซ"      color="#fbbf24"/>
-              <Btn label="🔨 ประมูล"   cmd="ประมูล"   color="#c084fc"/>
             </div>
 
             {/* ── เงิน ── */}
@@ -2646,7 +2918,6 @@ function AdminPanel({ onCmd }) {
             </div>
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:4}}>
               <Btn label="🔄 รีเซ็ต"     cmd="รีเซ็ต"   color="#ffffff44"/>
-              <Btn label="❄️ แช่แข็ง"    cmd="แช่แข็ง"  color="#38bdf8"/>
             </div>
 
           </div>
@@ -2836,11 +3107,9 @@ function GameScreen({ session, initPlayers, client, onEnd }) {
   const shortR     = useRef({});
   const priceR     = useRef(Object.fromEntries(gameAssets.map(a=>[a.id,a.bp])));
   const histR      = useRef(Object.fromEntries(gameAssets.map(a=>[a.id,[a.bp]])));
-  const frozenR    = useRef(false);
   const evR        = useRef(null);
   const evTimerR   = useRef(0);
   const nextEvR    = useRef(18);
-  const nextCardR  = useRef(35);
   const botsR      = useRef(initPlayers.filter(p=>!p.isMe).map(p=>({
     ...p, cash:initCash, hold:{}, nw:initCash,
   })));
@@ -2860,9 +3129,6 @@ function GameScreen({ session, initPlayers, client, onEnd }) {
   const [phase,    setPhase]   = useState("BULL");
   const [activeEv, setActiveEv]= useState(null);
   const [evTimer,  setEvTimer] = useState(0);
-  const [frozen,   setFrozen]  = useState(false);
-  const [cards,    setCards]   = useState(cfg.cards?[PCARDS[0]]:[]);
-  const [intelEv,  setIntelEv] = useState(null);
   const [notif,    setNotif]   = useState(null);
   const [selAsset, setSelAsset]= useState(null);
   const [catFilter,setCatFilter]= useState("all");
@@ -2895,6 +3161,13 @@ function GameScreen({ session, initPlayers, client, onEnd }) {
 
   // ── HORSE RACE (solo, self-contained in modal) ──
   // state managed inside HorseRaceWatchModal; no refs needed here
+
+  // ── CAREER ──
+  const [career,      setCareer]     = useState(null);   // career id or null
+  const careerR       = useRef(null);
+  const [careerCD,    setCareerCD]   = useState(0);      // cooldown seconds remaining
+  const careerCDR     = useRef(0);
+  const [careerModal, setCareerModal]= useState(null);   // 'vendor'|'rider'|'mechanic'|'casino'|null
 
   const [openingItem, setOpeningItem] = useState(null); // gacha animation state: {item, boxType}
 
@@ -3264,14 +3537,9 @@ function GameScreen({ session, initPlayers, client, onEnd }) {
         setPrices({...priceR.current});
         showNotif(`🔧 ${assetId} = ฿${val.toLocaleString()}`,"#38bdf8");
       } else { showNotif(`❌ ไม่เจอ asset "${assetId}"`,"#f87171"); }
-    // ── แช่แข็ง ──
-    } else if (c === "แช่แข็ง") {
-      frozenR.current = true; setFrozen(true);
-      setTimeout(()=>{ frozenR.current=false; setFrozen(false); },10000);
-      showNotif("🔧 ❄️ แช่แข็งราคา 10 วิ","#38bdf8");
     // ── ช่วยเหลือ ──
     } else {
-      showNotif("🔧 คำสั่ง: ขึ้น / ลง / วิกฤต / มูน / ทอง / อีเวนต์ [id] / หยุดอีเวนต์ / ไฮปขึ้น / ไฮปลง / เงิน [จำนวน] / รีเซ็ต / ราคา [ASSET] [ราคา] / แช่แข็ง","#ffffff44");
+      showNotif("🔧 คำสั่ง: ขึ้น / ลง / วิกฤต / มูน / ทอง / อีเวนต์ [id] / หยุดอีเวนต์ / ไฮปขึ้น / ไฮปลง / เงิน [จำนวน] / รีเซ็ต / ราคา [ASSET] [ราคา]","#ffffff44");
     }
   };
 
@@ -3378,7 +3646,7 @@ function GameScreen({ session, initPlayers, client, onEnd }) {
         return nt;
       });
 
-      if (!frozenR.current && tickR.current % 4 === 0) {
+      if (tickR.current % 4 === 0) {
         const ev = evR.current;
         gameAssets.forEach(a => {
           const eff = ev ? (ev.eff[a.type]||0) : 0;
@@ -3403,6 +3671,13 @@ function GameScreen({ session, initPlayers, client, onEnd }) {
         evR.current = ev; evTimerR.current = ev.dur;
         setActiveEv({...ev, _ts:Date.now()}); setEvTimer(ev.dur);
         _snd.play('event');
+        // กระทบ hype index ทันทีถ้า event นี้มี hypeEff
+        if (ev.hypeEff) {
+          Object.entries(ev.hypeEff).forEach(([t, mult]) => {
+            hypeIdxR.current[t] = Math.min(6.0, Math.max(0.15, hypeIdxR.current[t] * mult));
+          });
+          setHypeIdx({...hypeIdxR.current});
+        }
         // RE/Gold ได้ income bonus เมื่อ event ดีๆ เกิด
         if((ev.eff.realestate||0)>0.1){
           const bonus=["CONDO","HOUSE","MALL"].reduce((s,id)=>s+((holdR.current[id]||0)*(ASSETS.find(a=>a.id===id)||{inc:0}).inc*3),0);
@@ -3424,15 +3699,6 @@ function GameScreen({ session, initPlayers, client, onEnd }) {
         evTimerR.current--;
         setEvTimer(evTimerR.current);
         if (evTimerR.current <= 0) { evR.current=null; setActiveEv(null); }
-      }
-
-      if (cfg.cards) {
-        nextCardR.current--;
-        if (nextCardR.current <= 0) {
-          const c = PCARDS[Math.floor(Math.random()*PCARDS.length)];
-          setCards(prev => prev.length<3?[...prev,c]:prev);
-          nextCardR.current = cfg.cards ? 35 : 55;
-        }
       }
 
       // Short fee + force cover (offline) — deduct from bank
@@ -3548,28 +3814,6 @@ function GameScreen({ session, initPlayers, client, onEnd }) {
         setHypeIdx({...hypeIdxR.current});
       }
 
-      // Hype events every 22 ticks (35% chance) — crash มากกว่า pump
-      if(tickR.current % 22 === 0 && Math.random()<0.35){
-        const hypeEvts=[
-          {t:"card",   msg:"🃏 Card Hype! การ์ดร้อนแรง!",    mult:1.6},
-          {t:"figure", msg:"🎎 Figure Boom! ฟิกเกอร์บูม!",    mult:1.5},
-          {t:"gameid", msg:"🎮 Game Launch! ไอดีร้อน!",       mult:1.6},
-          {t:"card",   msg:"🃏 SSR Spotted! การ์ดหายากพุ่ง!",  mult:2.0},
-          {t:"figure", msg:"🎎 Collab! ฟิกฯ Limited พุ่ง!",   mult:1.8},
-          {t:"gameid", msg:"🎮 Pro Season! ไอดีแพงขึ้น!",     mult:1.7},
-          {t:"card",   msg:"🃏 Card Dump! การ์ดราคาตก",        mult:0.55},
-          {t:"figure", msg:"🎎 Figure Crash! ราคาดิ่ง",        mult:0.58},
-          {t:"gameid", msg:"🎮 Game Dead! ไอดีราคาร่วง",       mult:0.50},
-          {t:"card",   msg:"🃏 การ์ดล้นตลาด ลงหนัก",           mult:0.45},
-          {t:"figure", msg:"🎎 โรงงานทุ่มตลาด ฟิกฯ ร่วง",     mult:0.48},
-          {t:"gameid", msg:"🎮 Account Ban Wave! ไอดีตก",      mult:0.42},
-        ];
-        const hev=hypeEvts[Math.floor(Math.random()*hypeEvts.length)];
-        hypeIdxR.current[hev.t]=Math.min(6.0,Math.max(0.15,hypeIdxR.current[hev.t]*hev.mult));
-        setHypeIdx({...hypeIdxR.current});
-        showNotif(hev.msg,"#c084fc");
-      }
-
       // options expiry is handled in its own useEffect (timestamp-based, works online+offline)
 
       // horse race is now solo/modal-driven (no tick needed here)
@@ -3661,9 +3905,11 @@ function GameScreen({ session, initPlayers, client, onEnd }) {
     return () => clearInterval(id);
   }, [showNotif, syncCash]);
 
-  // ── BOX STOCK RESTOCK (every 1s tick, restock every 120 ticks) ──
+  // ── BOX STOCK RESTOCK + CAREER COOLDOWN (every 1s) ──
   useEffect(() => {
     const id = setInterval(() => {
+      // career cooldown
+      if (careerCDR.current > 0) { careerCDR.current--; setCareerCD(careerCDR.current); }
       boxTimerR.current--;
         setBoxTimer(boxTimerR.current);
         if (boxTimerR.current <= 0) {
@@ -3803,6 +4049,45 @@ function GameScreen({ session, initPlayers, client, onEnd }) {
   };
   const doRaceLose = () => { _snd.play('bust'); showNotif("💔 ม้าแพ้","#f87171"); };
 
+  // ── CAREER ACTIONS ──
+  const doCareerBuy = (cid) => {
+    const c = CAREERS.find(x=>x.id===cid);
+    if (!c) return;
+    if (cashR.current < c.cost) { showNotif(`❌ เงินสดไม่พอ — ต้องการ ${fmt(c.cost)}`,"#f87171"); return; }
+    if (careerR.current) { showNotif("❌ ขายอาชีพเดิมก่อน","#f87171"); return; }
+    cashR.current -= c.cost; syncCash();
+    careerR.current = cid; setCareer(cid);
+    careerCDR.current = 0; setCareerCD(0);
+    showNotif(`${c.name} — เริ่มงานได้เลย!`, c.color);
+  };
+  const doCareerSell = () => {
+    const c = CAREERS.find(x=>x.id===careerR.current);
+    if (!c) return;
+    const refund = Math.round(c.cost*0.6);
+    cashR.current += refund; syncCash();
+    careerR.current = null; setCareer(null);
+    careerCDR.current = 0; setCareerCD(0);
+    showNotif(`💸 ลาออก ${c.name} +${fmt(refund)}`,"#94a3b8");
+  };
+  const onCareerResult = (earn) => {
+    setCareerModal(null);
+    if (earn > 0) {
+      const mult = (evR.current?.careerMult?.[careerR.current]) || 1;
+      const final = Math.round(earn * mult);
+      cashR.current += final; syncCash();
+      _snd.play('buy');
+      if (mult !== 1) {
+        showNotif(`💰 +${fmt(final)} (×${mult} จากอีเว้น!)`, mult > 1 ? "#4ade80" : "#fbbf24");
+      } else {
+        showNotif(`💰 +${fmt(final)}`,"#4ade80");
+      }
+    } else if (earn < 0) {
+      cashR.current = Math.max(0, cashR.current + earn); syncCash();
+      _snd.play('bust'); showNotif(`❌ ${fmt(earn)}`,"#f87171");
+    }
+    careerCDR.current = 60; setCareerCD(60);
+  };
+
   const openGamble = (id, bet) => {
     if (cashR.current < bet) { showNotif(`❌ เงินสดไม่พอ (ต้องการ ${fmt(bet)})`,"#f87171"); return; }
     activeBetR.current = bet;
@@ -3862,42 +4147,6 @@ function GameScreen({ session, initPlayers, client, onEnd }) {
     if (cashR.current < bet) { showNotif("❌ เงินสดไม่พอ","#f87171"); setModal(null); return; }
     cashR.current -= bet; syncCash();
     setPlinkoKey(k => k + 1);
-  };
-
-  const useCard = (card, idx) => {
-    if (card.id==="freeze") {
-      frozenR.current=true; setFrozen(true);
-      setTimeout(()=>{ frozenR.current=false; setFrozen(false); },10000);
-      showNotif("❄️ ตลาดแช่แข็ง 10 วิ","#38bdf8");
-    } else if (card.id==="squeeze") {
-      gameAssets.filter(a=>a.type==="crypto").forEach(a=>priceR.current[a.id]*=1.25);
-      setPrices({...priceR.current});
-      showNotif("⚡ Crypto พุ่ง +25%!","#c084fc");
-    } else if (card.id==="intel") {
-      const n=EVENTS[Math.floor(Math.random()*EVENTS.length)];
-      setIntelEv(n); setTimeout(()=>setIntelEv(null),8000);
-      showNotif("🕵️ Insider Intel!","#fbbf24");
-    } else if (card.id==="copy") {
-      const lead = [...botsR.current].sort((a,b)=>b.nw-a.nw)[0];
-      if (lead) {
-        const top = Object.entries(lead.hold).sort((a,b)=>b[1]-a[1])[0];
-        if (top) {
-          const [aid,aq]=top, ga=gameAssets.find(x=>x.id===aid);
-          const cq=Math.max(1,Math.floor(aq*0.35)), cost=(priceR.current[aid]||0)*cq;
-          if (bankR.current>=cost&&ga) {
-            bankR.current-=cost; holdR.current[aid]=(holdR.current[aid]||0)+cq;
-            basisR.current[aid]=(basisR.current[aid]||0)+cost;
-            syncBank(); syncHold(); syncBasis();
-            showNotif(`📋 Copy ${lead.name}: ${ga.name} ×${cq}`,"#4ade80");
-          }
-        }
-      }
-    } else if (card.id==="bomb") {
-      gameAssets.forEach(a=>priceR.current[a.id]*=(0.82+Math.random()*0.36));
-      setPrices({...priceR.current});
-      showNotif("💣 ตลาดผันผวน!","#f87171");
-    }
-    setCards(p=>p.filter((_,i)=>i!==idx));
   };
 
 const allP = (onlineRef.current && board.length > 0)
@@ -4039,13 +4288,6 @@ const myRank = allP.findIndex(p=>p.isMe)+1;
           </div>
         </div>
       )}
-      {intelEv && (
-        <div style={{margin:"0 14px 6px",padding:"8px 13px",borderRadius:9,background:"#c084fc0a",border:"1px solid #c084fc20"}}>
-          <div style={{fontSize:8,letterSpacing:3,color:"#c084fc44",marginBottom:2}}>INTEL</div>
-          <div style={{color:"#c084fc",fontWeight:700,fontSize:12}}>{intelEv.title} กำลังจะเกิด!</div>
-        </div>
-      )}
-
       {notif && (
         <div key={notif.id} style={{
           position:"fixed",top:72,left:"50%",transform:"translateX(-50%)",
@@ -4059,25 +4301,6 @@ const myRank = allP.findIndex(p=>p.isMe)+1;
         }}>{notif.msg}</div>
       )}
 
-      {cfg.cards && cards.length > 0 && (
-        <div style={{padding:"5px 14px 3px"}}>
-          <div style={{fontSize:8,letterSpacing:3,color:"#ffffff15",marginBottom:5}}>POWER CARDS</div>
-          <div style={{display:"flex",gap:6,overflowX:"auto",paddingBottom:3}}>
-            {cards.map((c,i)=>(
-              <button key={i} onClick={()=>useCard(c,i)} style={{padding:"6px 11px",borderRadius:7,flexShrink:0,
-                border:`1px solid ${c.color}25`,background:`${c.color}0c`,color:c.color,cursor:"pointer",
-                fontSize:10,fontFamily:G.font,fontWeight:700,whiteSpace:"nowrap",transition:"all .15s",
-              }}>{c.name}</button>
-            ))}
-          </div>
-        </div>
-      )}
-      {frozen && (
-        <div style={{margin:"3px 14px",padding:"5px 13px",borderRadius:7,background:"#38bdf808",border:"1px solid #38bdf818",color:"#38bdf8",fontSize:9,textAlign:"center"}}>
-          ❄️ ตลาดแช่แข็ง
-        </div>
-      )}
-
       {/* TABS */}
       <div style={{display:"flex",gap:2,padding:"8px 10px 0",borderBottom:`1px solid ${G.border}`,overflowX:"auto",scrollbarWidth:"none"}}>
         {[
@@ -4085,6 +4308,7 @@ const myRank = allP.findIndex(p=>p.isMe)+1;
           {k:"portfolio", l:"💼 พอร์ต"},
           {k:"hype",      l:"🎴 กระแส"},
           {k:"gamble",    l:"🎲 Gamble"},
+          {k:"career",    l:`💼 อาชีพ${career?" ✦":""}`},
           {k:"rank",      l:"🏆 Rank"},
           {k:"history",   l:`📋 ประวัติ${tradeHistory.length>0?` ${tradeHistory.length}`:""}`},
           {k:"chat",      l:`💬 แชท${chatMsgs.length>0?" ·":""}`},
@@ -4441,6 +4665,78 @@ const myRank = allP.findIndex(p=>p.isMe)+1;
           </div>
         )}
 
+        {/* CAREER TAB */}
+        {tab==="career" && (
+          <div>
+            {!career ? (
+              <>
+                <div style={{fontSize:9,letterSpacing:3,color:"#ffffff20",marginBottom:12}}>เลือกอาชีพ</div>
+                <div style={{display:"flex",flexDirection:"column",gap:10}}>
+                  {CAREERS.map(c=>(
+                    <div key={c.id} style={{padding:"14px 16px",borderRadius:13,background:"#ffffff04",border:`1px solid ${c.color}22`}}>
+                      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
+                        <div>
+                          <div style={{fontSize:14,fontWeight:700,color:c.color,marginBottom:2}}>{c.name}</div>
+                          <div style={{fontSize:9,color:"#ffffff44"}}>{c.desc} · cooldown 60 วิ/ครั้ง</div>
+                        </div>
+                        <button onClick={()=>doCareerBuy(c.id)} style={{
+                          padding:"7px 14px",borderRadius:9,cursor:"pointer",fontFamily:G.font,
+                          border:`1px solid ${c.color}50`,background:`${c.color}18`,
+                          color:c.color,fontSize:11,fontWeight:700,flexShrink:0,
+                        }}>฿{c.cost.toLocaleString()}</button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <div style={{textAlign:"center",marginTop:14,fontSize:9,color:"#ffffff22"}}>ถือได้ทีละ 1 อาชีพ · ขายคืน 60%</div>
+              </>
+            ) : (()=>{
+              const c = CAREERS.find(x=>x.id===career);
+              const ready = careerCD === 0;
+              const pct = (60-careerCD)/60*100;
+              const evMult = activeEv?.careerMult?.[career];
+              return (
+                <>
+                  <div style={{padding:"18px 16px",borderRadius:14,background:`${c.color}0a`,border:`1px solid ${c.color}30`,marginBottom:14}}>
+                    <div style={{fontSize:18,fontWeight:700,color:c.color,marginBottom:4}}>{c.name}</div>
+                    <div style={{fontSize:9,color:"#ffffff44",marginBottom:evMult?8:16}}>{c.desc}</div>
+                    {evMult && (
+                      <div style={{
+                        display:"inline-flex",alignItems:"center",gap:5,
+                        padding:"4px 10px",borderRadius:8,marginBottom:12,
+                        background: evMult > 1 ? "#4ade8018" : "#f8717118",
+                        border: `1px solid ${evMult > 1 ? "#4ade8040" : "#f8717140"}`,
+                        fontSize:10, color: evMult > 1 ? "#4ade80" : "#f87171", fontWeight:700,
+                      }}>
+                        {evMult > 1 ? "⚡" : "📉"} {activeEv.title} — รายได้ ×{evMult}
+                      </div>
+                    )}
+                    {/* cooldown bar */}
+                    <div style={{height:6,background:"#ffffff08",borderRadius:4,marginBottom:8,overflow:"hidden"}}>
+                      <div style={{height:"100%",width:`${pct}%`,background:ready?"#4ade80":c.color,borderRadius:4,transition:"width .9s linear"}}/>
+                    </div>
+                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                      <span style={{fontSize:9,color:ready?"#4ade80":"#ffffff44",fontWeight:ready?700:400}}>
+                        {ready?"✅ พร้อมทำงาน":(`⏳ ${careerCD} วิ`)}
+                      </span>
+                      <button onClick={()=>ready&&setCareerModal(career)} style={{
+                        padding:"9px 22px",borderRadius:10,cursor:ready?"pointer":"default",fontFamily:G.font,
+                        border:`1px solid ${ready?c.color+"60":"#ffffff15"}`,
+                        background:ready?`${c.color}20`:"#ffffff05",
+                        color:ready?c.color:"#ffffff30",fontSize:12,fontWeight:700,transition:"all .2s",
+                      }}>▶ ทำงาน</button>
+                    </div>
+                  </div>
+                  <button onClick={doCareerSell} style={{
+                    width:"100%",padding:"9px",borderRadius:9,cursor:"pointer",fontFamily:G.font,
+                    border:"1px solid #ffffff18",background:"#ffffff06",color:"#ffffff44",fontSize:10,fontWeight:700,
+                  }}>ลาออก (คืน ฿{Math.round(c.cost*0.6).toLocaleString()})</button>
+                </>
+              );
+            })()}
+          </div>
+        )}
+
         {/* RANK TAB */}
         {tab==="rank" && (
           <div>
@@ -4792,17 +5088,6 @@ const myRank = allP.findIndex(p=>p.isMe)+1;
               </div>
               <Tip>แข่งม้าใช้เงินสด — ฝากเงินธนาคารไว้เยอะๆ ก่อนกดแข่ง เพื่อลดความเสี่ยง</Tip>
 
-              {cfg.cards && <>
-                <GH color="#38bdf8">🃏 Power Cards (Casual Mode)</GH>
-                <GT cols={["ไพ่","ผล","ใช้เมื่อ"]} rows={[
-                  ["❄️ Freeze","หยุดราคาทุก asset 10 วิ","ราคาดีอยู่ ไม่อยากให้เปลี่ยน"],
-                  ["⚡ Squeeze","Crypto พุ่ง +25% ทันที","ก่อนใช้ซื้อ Crypto เยอะๆ ก่อน"],
-                  ["🕵️ Intel","เห็น Event ถัดไปล่วงหน้า 8 วิ","เตรียมพอร์ตก่อนคนอื่น"],
-                  ["📋 Copy","ซื้อตาม portfolio ของ Rank 1","ตอนตามหลังและไม่รู้จะลงทุนไหน"],
-                  ["💣 Sabotage","ราคาทุก asset ผันผวนสุ่ม","ตอนตามหลัง ทำให้ตลาดสับสน"],
-                ]}/>
-              </>}
-
               <GH color="#fbbf24">💡 Tips สำหรับมือใหม่</GH>
               {[
                 "ซื้ออสังหาฯ 1-2 ชิ้นตั้งแต่แรก เพราะ Passive Income สะสมทั้งเกม",
@@ -4862,6 +5147,10 @@ const myRank = allP.findIndex(p=>p.isMe)+1;
       {modal==="mines"     && <MinesModal     onResult={handleGambleResult} onClose={()=>cancelGamble("mines")}     bet={activeBetR.current||GAMBLE_COSTS.mines}/>}
       {modal==="blackjack" && <BlackjackModal onResult={handleGambleResult} onClose={()=>cancelGamble("blackjack")} onDoubleBet={handleBlackjackDouble} bet={activeBetR.current||GAMBLE_COSTS.blackjack} maxCash={cash}/>}
       {modal==="horserace" && <HorseRaceWatchModal cash={cash} onBet={doRaceBet} onWin={doRaceWin} onLose={doRaceLose} onClose={()=>setModal(null)}/>}
+      {careerModal==="vendor"   && <VendorMiniGame   onResult={onCareerResult}/>}
+      {careerModal==="rider"    && <RiderMiniGame     onResult={onCareerResult}/>}
+      {careerModal==="mechanic" && <MechanicMiniGame  onResult={onCareerResult}/>}
+      {careerModal==="casino"   && <CasinoMiniGame    onResult={onCareerResult}/>}
       {betSelectId && <BetSelectorModal gameId={betSelectId} cash={cash} onConfirm={(b)=>openGamble(betSelectId,b)} onClose={()=>setBetSelectId(null)}/>}
 
       {/* GACHA ANIMATION MODAL */}
