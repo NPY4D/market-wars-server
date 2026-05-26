@@ -1891,38 +1891,35 @@ function HorseRaceWatchModal({ cash, onBet, onWin, onLose, onClose }) {
 
   const startRace = (horse, amount) => {
     if (!onBet(horse, amount)) return;
-    const w = Math.floor(Math.random() * 5);
-    winRef.current = w;
+    winRef.current = -1;
     posRef.current = [0,0,0,0,0];
-    // winner gets +0.09 base speed so it naturally leads — no teleport needed
-    velRef.current = HORSE_NAMES.map((_,i) => {
-      const base = 0.27 + Math.random() * 0.24;
-      return i === w ? base + 0.09 : base;
-    });
+    velRef.current = HORSE_NAMES.map(() => 0.27 + Math.random() * 0.24);
     setPlayerBet({horse, amount});
     setPositions([0,0,0,0,0]);
     setVels([...velRef.current]);
     setFinalStretch(false);
     setPhase('racing');
     ivRef.current = setInterval(() => {
-      velRef.current = velRef.current.map((v,i) => {
-        const stretch = (i === winRef.current && posRef.current[i] > 50) ? 0.09 : 0;
-        return Math.max(0.10, Math.min(0.78, v + (Math.random()-0.5)*0.10 + stretch));
-      });
-      posRef.current = posRef.current.map((p,i) => Math.min(100, p + velRef.current[i]));
-      // no teleport — winner crosses finish line naturally
-      const snap = [...posRef.current];
-      const vsnap = [...velRef.current];
-      setPositions(snap);
-      setVels(vsnap);
-      if (Math.max(...snap) > 70) setFinalStretch(true);
-      if (posRef.current[winRef.current] >= 100) {
+      velRef.current = velRef.current.map(v =>
+        Math.max(0.10, Math.min(0.78, v + (Math.random()-0.5)*0.10))
+      );
+      const next = posRef.current.map((p,i) => p + velRef.current[i]);
+      // ตัวแรกที่ถึง 100 = ผู้ชนะจริงๆ
+      const finisher = next.findIndex(p => p >= 100);
+      if (finisher !== -1) {
+        posRef.current = next.map(p => Math.min(100, p));
         clearInterval(ivRef.current); ivRef.current = null;
-        const didWin = horse === winRef.current;
-        setWinner(winRef.current); setWon(didWin); setPhase('result');
+        const didWin = horse === finisher;
+        setPositions([...posRef.current]);
+        setWinner(finisher); setWon(didWin); setPhase('result');
         if (didWin) onWin(Math.round(amount * 2.4));
         else onLose();
+        return;
       }
+      posRef.current = next;
+      setPositions([...next]);
+      setVels([...velRef.current]);
+      if (Math.max(...next) > 70) setFinalStretch(true);
     }, 50);
   };
 
@@ -3140,7 +3137,7 @@ function GameScreen({ session, initPlayers, client, onEnd }) {
   const mktplaceR  = useRef([]);
   const chatR      = useRef([]);
   const hypeIdxR   = useRef({card:1.0,figure:1.0,gameid:1.0});
-  const boxStockR  = useRef({card:Math.floor(Math.random()*8)+3,figure:Math.floor(Math.random()*6)+2,gameid:Math.floor(Math.random()*7)+2});
+  const boxStockR  = useRef({card:Math.floor(Math.random()*8)+1,figure:Math.floor(Math.random()*8)+1,gameid:Math.floor(Math.random()*8)+1});
   const boxTimerR  = useRef(120);
   const [hypeIdx,    setHypeIdx]   = useState({card:1.0,figure:1.0,gameid:1.0});
   const [hypeInv,    setHypeInv]   = useState([]);
@@ -3921,9 +3918,9 @@ function GameScreen({ session, initPlayers, client, onEnd }) {
         if (boxTimerR.current <= 0) {
           boxTimerR.current = 120;
           const ns = {
-            card:  Math.floor(Math.random()*15)+1,
-            figure:Math.floor(Math.random()*15)+1,
-            gameid:Math.floor(Math.random()*15)+1,
+            card:  Math.floor(Math.random()*8)+1,
+            figure:Math.floor(Math.random()*8)+1,
+            gameid:Math.floor(Math.random()*8)+1,
           };
           boxStockR.current = ns;
           setBoxStock({...ns});
@@ -4312,9 +4309,9 @@ const myRank = allP.findIndex(p=>p.isMe)+1;
         {[
           {k:"market",    l:"📊 ตลาด"},
           {k:"portfolio", l:"💼 พอร์ต"},
+          {k:"career",    l:`🧑‍💼 อาชีพ${career?" ✦":""}`},
           {k:"hype",      l:"🎴 กระแส"},
           {k:"gamble",    l:"🎲 Gamble"},
-          {k:"career",    l:`💼 อาชีพ${career?" ✦":""}`},
           {k:"rank",      l:"🏆 Rank"},
           {k:"history",   l:`📋 ประวัติ${tradeHistory.length>0?` ${tradeHistory.length}`:""}`},
           {k:"chat",      l:`💬 แชท${chatMsgs.length>0?" ·":""}`},
