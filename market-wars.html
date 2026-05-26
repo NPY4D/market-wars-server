@@ -3161,7 +3161,7 @@ function GameScreen({ session, initPlayers, client, onEnd }) {
       }
     };
     return () => { onlineRef.current=false; client.cb = origCb; };
-  }, [client, session.nick, applyServerCash]);
+  }, [client, session.nick]); // applyServerCash stable useCallback — ไม่ต้องใส่ deps
 
   const showNotif = useCallback((msg, color="#4ade80") => {
     setNotif({msg,color,id:Date.now()});
