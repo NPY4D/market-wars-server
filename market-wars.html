@@ -74,6 +74,8 @@ const G = {
   text:"#e2e8f0", sub:"#64748b", font:"'IBM Plex Mono','Courier New',monospace",
 };
 
+const BUILD = "v2.2 · 26/05/69 23:30";
+
 const ASSETS = [
   // หุ้น
   { id:"AAPL", name:"Apple",    emoji:"🍎", type:"stock",      bp:52,   vol:0.028, color:"#38bdf8" },
@@ -4173,6 +4175,13 @@ const myRank = allP.findIndex(p=>p.isMe)+1;
 
   return (
     <div style={{minHeight:"100vh",background:G.bg,fontFamily:G.font,paddingBottom:72}}>
+
+      {/* VERSION BADGE */}
+      <div style={{position:"fixed",bottom:6,left:8,zIndex:9999,
+        fontSize:8,color:"#ffffff55",fontFamily:G.font,letterSpacing:1,
+        pointerEvents:"none",userSelect:"none",
+        textShadow:"0 1px 4px #000000aa",
+      }}>{BUILD}</div>
 
       {/* ONLINE STATUS BAR */}
       {ONLINE_MODE && (
