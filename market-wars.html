@@ -3420,6 +3420,7 @@ function GameScreen({ session, initPlayers, client, onEnd }) {
   // ── RACE & AUCTION (runs in both online & offline, every 1s) ──
   useEffect(() => {
     const id = setInterval(() => {
+      if (onlineRef.current) return; // online mode: race & auction driven by timeLeft effect
       // ── HORSE RACE (automated, horse-based) ──
       {
         const NPC_NICKS = ["สมชาย","นุ่น","แม็กซ์","จุ๋ม","เต้","บาส","พิม","เอิร์น","ต้น","มิ้น"];
@@ -3553,6 +3554,148 @@ function GameScreen({ session, initPlayers, client, onEnd }) {
     }, 1000);
     return () => { clearInterval(id); if (racingSubIdR.current) { clearInterval(racingSubIdR.current); racingSubIdR.current = null; } };
   }, [showNotif, syncCash, session, gameAssets]);
+
+  // ── ONLINE: RACE & AUCTION SYNC (all players in same room see same events) ──
+  useEffect(() => {
+    if (!onlineRef.current) return;
+    const dur = session.duration || cfg.dur;
+    const elapsed = dur - timeLeft;
+    const RACE_CYCLE = 70; // 15s break + 25s betting + 25s racing + 5s result
+    const AUC_CYCLE  = 80; // 20s idle + 20s bidding + 40s owned
+    const AUC_OFFSET = 35; // stagger so auction doesn't start same time as race
+
+    const codeH   = (session.code || '').split('').reduce((h, c) => (h * 31 + c.charCodeAt(0)) | 0, 0);
+    const seededR = (n) => { const x = Math.sin(n * 127.1 + 311.7) * 43758.5453; return x - Math.floor(x); };
+
+    // ── HORSE RACE ──
+    const raceEpoch = Math.floor(elapsed / RACE_CYCLE);
+    const rt        = elapsed % RACE_CYCLE;
+    const rs        = raceR.current;
+
+    if (rt < 15) {
+      // break
+      const breakLeft = 15 - rt;
+      if (rs.phase !== 'break') { rs.phase = 'break'; rs.breakTick = breakLeft; setRace({...rs}); }
+      else { rs.breakTick = breakLeft; setRace({...rs}); }
+    } else if (rt < 40) {
+      // betting open
+      const betTick = 40 - rt;
+      if (rs.phase !== 'betting') {
+        rs.phase = 'betting'; rs.betTick = betTick;
+        rs.positions = [0,0,0,0,0];
+        rs.velocities = HORSE_NAMES.map(() => 1.5 + Math.random() * 1.5);
+        rs.winner = -1; rs.npcBets = [[],[],[],[],[]]; rs.won = false;
+        setRace({...rs}); setRacePickedHorse(-1);
+        showNotif("🏇 เปิดรับเดิมพัน! แข่งม้า — 25 วิ!", "#fbbf24");
+        _snd.play('event');
+      } else { rs.betTick = betTick; setRace({...rs}); }
+    } else if (rt < 65) {
+      // racing — start sub-interval animation once per epoch
+      if (rs.phase === 'betting' || (rs.phase === 'break' && elapsed > 0)) {
+        rs.phase = 'racing'; setRace({...rs});
+        showNotif("🏁 ม้าออกสตาร์ท!", "#fbbf24"); _snd.play('beepHi');
+        const winner = Math.floor(seededR(raceEpoch * 997 + Math.abs(codeH)) * 5);
+        if (racingSubIdR.current) clearInterval(racingSubIdR.current);
+        racingSubIdR.current = setInterval(() => {
+          const rs2 = raceR.current;
+          if (rs2.phase !== 'racing') { clearInterval(racingSubIdR.current); racingSubIdR.current = null; return; }
+          rs2.velocities = rs2.velocities.map(v => Math.max(0.5, Math.min(4, v + (Math.random()-0.5)*1.5)));
+          rs2.positions  = rs2.positions.map((p, i) => Math.min(100, p + rs2.velocities[i] + (i === winner && p > 60 ? 0.5 : 0)));
+          if (Math.max(...rs2.positions) >= 95) rs2.positions[winner] = 100;
+          const finIdx = rs2.positions.findIndex(p => p >= 100);
+          if (finIdx >= 0) {
+            rs2.winner = finIdx; rs2.phase = 'result';
+            rs2.won = rs2.playerBet?.horse === finIdx;
+            if (rs2.playerBet) {
+              if (rs2.won) {
+                const pay = Math.round(rs2.playerBet.amount * 2.4); cashR.current += pay; syncCash();
+                showNotif(`🏆 ${HORSE_EMOJIS[finIdx]} ${HORSE_NAMES[finIdx]} ชนะ! +${fmt(pay)} (×2.4)`, "#fbbf24");
+                _snd.play('jackpot'); setConfetti(true); setTimeout(() => setConfetti(false), 3000);
+              } else {
+                showNotif(`💔 ${HORSE_EMOJIS[finIdx]} ${HORSE_NAMES[finIdx]} ชนะ — เสีย ${fmt(rs2.playerBet.amount)}`, "#f87171");
+                _snd.play('bust');
+              }
+            } else { showNotif(`🏁 ${HORSE_EMOJIS[finIdx]} ${HORSE_NAMES[finIdx]} ชนะ!`, "#94a3b8"); }
+            setRace({...rs2});
+            clearInterval(racingSubIdR.current); racingSubIdR.current = null;
+          } else { setRace({...rs2}); }
+        }, 250);
+      }
+      // if already 'racing', let sub-interval drive it
+    } else {
+      // result window (rt 65-69) — force finish if animation still running
+      if (rs.phase === 'racing') {
+        const winner = Math.floor(seededR(raceEpoch * 997 + Math.abs(codeH)) * 5);
+        if (racingSubIdR.current) { clearInterval(racingSubIdR.current); racingSubIdR.current = null; }
+        rs.positions = rs.positions.map((p, i) => i === winner ? 100 : Math.min(99, p));
+        rs.winner = winner; rs.phase = 'result';
+        rs.won = rs.playerBet?.horse === winner;
+        if (rs.playerBet) {
+          if (rs.won) {
+            const pay = Math.round(rs.playerBet.amount * 2.4); cashR.current += pay; syncCash();
+            showNotif(`🏆 ${HORSE_EMOJIS[winner]} ${HORSE_NAMES[winner]} ชนะ! +${fmt(pay)} (×2.4)`, "#fbbf24");
+            _snd.play('jackpot'); setConfetti(true); setTimeout(() => setConfetti(false), 3000);
+          } else {
+            showNotif(`💔 ${HORSE_EMOJIS[winner]} ${HORSE_NAMES[winner]} ชนะ — เสีย ${fmt(rs.playerBet.amount)}`, "#f87171");
+            _snd.play('bust');
+          }
+        } else { showNotif(`🏁 ${HORSE_EMOJIS[winner]} ${HORSE_NAMES[winner]} ชนะ!`, "#94a3b8"); }
+        setRace({...rs});
+      }
+    }
+
+    // ── AUCTION (online: no NPC bots; quiet disappear if nobody bids) ──
+    const aucEpoch = Math.floor((elapsed + AUC_OFFSET) / AUC_CYCLE);
+    const at       = (elapsed + AUC_OFFSET) % AUC_CYCLE;
+    const as       = auctionR.current;
+
+    if (at < 20) {
+      // idle
+      if (as.phase !== 'idle') { as.phase = 'idle'; setAuction(null); }
+    } else if (at < 40) {
+      // bidding window
+      const aucWindow = 40 - at;
+      if (as.phase !== 'bidding') {
+        const assetIdx = Math.floor(seededR(aucEpoch * 1337 + Math.abs(codeH)) * gameAssets.length);
+        const a = gameAssets[assetIdx];
+        as.asset = a; as.phase = 'bidding'; as.window = aucWindow;
+        as.currentBid = Math.round((priceR.current[a.id] || a.bp) * 0.15) || 300;
+        as.currentBidder = null;
+        setAuction({...as}); setBidInput(as.currentBid + 200);
+        showNotif(`🔨 AUCTION! สิทธิ์ผูกขาด ${a.emoji}${a.name} — ประมูล 20 วิ!`, "#c084fc");
+        _snd.play('event');
+      } else { as.window = aucWindow; setAuction({...as}); }
+    } else {
+      // resolve or owned (at >= 40)
+      if (as.phase === 'bidding') {
+        if (!as.currentBidder) {
+          // no bids at all — disappear quietly
+          as.phase = 'idle'; setAuction(null);
+        } else if (as.currentBidder === 'player') {
+          as.phase = 'owned'; as.ownerNick = session.nick; as.ownerExpiry = AUC_CYCLE - at;
+          showNotif(`👑 คุณชนะ! ผูกขาด ${as.asset.emoji}${as.asset.name} เก็บค่าผ่านทาง!`, "#c084fc");
+          _snd.play('jackpot'); setAuction({...as});
+        } else {
+          as.phase = 'owned'; as.ownerNick = as.currentBidder; as.ownerExpiry = AUC_CYCLE - at;
+          showNotif(`${as.currentBidder} ชนะประมูล ${as.asset.emoji}${as.asset.name}`, "#ffffff44");
+          setAuction({...as});
+        }
+      } else if (as.phase === 'owned') {
+        as.ownerExpiry = AUC_CYCLE - at;
+        if (as.ownerExpiry <= 0) {
+          showNotif(`${as.asset?.emoji} สิทธิ์ผูกขาดหมดอายุ`, "#ffffff44");
+          as.phase = 'idle'; setAuction(null);
+        } else {
+          if (as.ownerNick === session.nick && at % 5 === 0) {
+            const toll = Math.max(10, Math.round((priceR.current[as.asset.id] || as.asset.bp) * 0.018));
+            cashR.current += toll; syncCash();
+            if (at % 15 === 0) showNotif(`👑 ค่าผ่านทาง ${as.asset.emoji} +${fmt(toll)}`, "#c084fc");
+          }
+          setAuction({...as});
+        }
+      }
+    }
+  }, [timeLeft, showNotif, syncCash, session, gameAssets]);
 
   const doBuy = (q) => {
     const p = priceR.current[selAsset.id]||selAsset.bp;
