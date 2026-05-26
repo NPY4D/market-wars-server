@@ -2585,6 +2585,171 @@ function AdminPanel({ onCmd }) {
   );
 }
 
+// ── GACHA OPEN MODAL ──
+function GachaOpenModal({ item, boxType, onClose }) {
+  const [phase, setPhase] = useState('spinning'); // spinning | rarity | revealed
+  const [cycleText, setCycleText] = useState('?');
+  const rarityLists = {
+    card:   ['N','R','SR','SSR','UR'],
+    figure: ['Standard','Limited','Exclusive','GodTier'],
+    gameid: ['Basic','Advanced','Premium','Limited'],
+  };
+  const rarityList = rarityLists[boxType] || ['N','R','SR','SSR','UR'];
+  const boxEmoji   = {card:'🃏', figure:'🎎', gameid:'🎮'}[boxType] || '📦';
+  const isRare  = ['SR','SSR','UR','GodTier','Exclusive','Premium'].includes(item.rarity);
+  const isUltra = ['UR','GodTier'].includes(item.rarity);
+  const rc = item.rarityColor || '#ffffff';
+
+  useEffect(() => {
+    let timers = [];
+    let idx = 0;
+    // Fast slot cycle 0-1100ms with tick sounds
+    let tickCount = 0;
+    const fastId = setInterval(() => {
+      idx=(idx+1)%rarityList.length; setCycleText(rarityList[idx]);
+      if (tickCount % 3 === 0) _snd.play('beep'); // every 3rd tick ~195ms
+      tickCount++;
+    }, 65);
+    // Slow down 1100ms+
+    const t1 = setTimeout(() => {
+      clearInterval(fastId);
+      let delay = 75;
+      const slowStep = () => {
+        idx=(idx+1)%rarityList.length; setCycleText(rarityList[idx]);
+        _snd.play('beep');
+        delay = Math.min(delay*1.48, 380);
+        if (delay < 370) { const tid = setTimeout(slowStep, delay); timers.push(tid); }
+        else {
+          setCycleText(item.rarity);
+          // Play reveal sound based on rarity
+          if (isUltra) _snd.play('jackpot');
+          else if (isRare) _snd.play('win');
+          else _snd.play('event');
+          const t2=setTimeout(()=>setPhase('rarity'), 320); timers.push(t2);
+          const t3=setTimeout(()=>setPhase('revealed'), 1400); timers.push(t3);
+        }
+      };
+      const tid0=setTimeout(slowStep, delay); timers.push(tid0);
+    }, 1100);
+    timers.push(t1);
+    return () => { clearInterval(fastId); timers.forEach(clearTimeout); };
+  }, []);
+
+  // Sparks for SSR/UR on reveal
+  const sparks = isRare ? [
+    {dx:'-60px',dy:'-50px'},{dx:'60px',dy:'-50px'},{dx:'-70px',dy:'20px'},{dx:'70px',dy:'20px'},
+    {dx:'0px',dy:'-70px'},{dx:'-40px',dy:'55px'},{dx:'40px',dy:'55px'},{dx:'0px',dy:'60px'},
+  ] : [];
+
+  return (
+    <div style={{position:'fixed',inset:0,zIndex:600,display:'flex',alignItems:'center',justifyContent:'center',
+      background:'#000000cc',backdropFilter:'blur(12px)'}} onClick={phase==='revealed'?onClose:undefined}>
+      <div onClick={e=>e.stopPropagation()} style={{
+        width:'100%',maxWidth:340,margin:'0 16px',borderRadius:24,padding:'28px 24px 32px',
+        background:'linear-gradient(160deg,#0e1c30,#0a1628)',
+        border:`1px solid ${rc}28`,
+        boxShadow:`0 0 60px ${rc}18, 0 24px 60px #00000088`,
+        animation:'modal-slide-up 0.32s cubic-bezier(0.34,1.12,0.64,1)',
+        textAlign:'center',position:'relative',overflow:'hidden',
+      }}>
+        {/* Ambient glow bg */}
+        <div style={{position:'absolute',inset:0,background:`radial-gradient(ellipse at 50% 40%, ${rc}0c, transparent 70%)`,pointerEvents:'none'}}/>
+
+        {/* ── SPINNING ── */}
+        {phase==='spinning' && (<>
+          <div style={{fontSize:11,color:'#ffffff33',letterSpacing:3,marginBottom:20,textTransform:'uppercase'}}>
+            กำลังเปิดกล่อง...
+          </div>
+          <div style={{fontSize:80,lineHeight:1,display:'inline-block',marginBottom:20,
+            animation:'box-shake 0.2s ease-in-out infinite',
+            filter:`drop-shadow(0 0 16px ${rc}44)`}}>
+            {boxEmoji}
+          </div>
+          {/* Slot window */}
+          <div style={{height:44,overflow:'hidden',margin:'0 auto 20px',width:160,
+            background:'#ffffff06',borderRadius:10,border:'1px solid #ffffff10',position:'relative'}}>
+            <div style={{position:'absolute',inset:0,background:'linear-gradient(180deg,#0a162888 0%,transparent 25%,transparent 75%,#0a162888 100%)',zIndex:2,pointerEvents:'none'}}/>
+            <div key={cycleText} style={{height:'100%',display:'flex',alignItems:'center',justifyContent:'center',
+              fontSize:16,fontWeight:900,letterSpacing:4,color:'#ffffffcc',
+              animation:'slot-tick 0.13s ease-out'}}>
+              {cycleText}
+            </div>
+          </div>
+          {/* Progress bar */}
+          <div style={{height:3,background:'#ffffff08',borderRadius:3,overflow:'hidden',margin:'0 8px'}}>
+            <div style={{height:'100%',borderRadius:3,
+              background:`linear-gradient(90deg,${rc}88,${rc})`,
+              animation:'gacha-bar 2s linear forwards'}}/>
+          </div>
+        </>)}
+
+        {/* ── RARITY REVEAL ── */}
+        {phase==='rarity' && (<>
+          <div style={{fontSize:11,color:rc,letterSpacing:3,marginBottom:16,animation:'fade-in .3s',textTransform:'uppercase',
+            textShadow:`0 0 12px ${rc}88`}}>
+            ผลลัพธ์!
+          </div>
+          <div style={{fontSize:72,lineHeight:1,display:'inline-block',marginBottom:20,
+            filter:`drop-shadow(0 0 24px ${rc})`,animation:'rarity-pop 0.5s cubic-bezier(0.34,1.56,0.64,1)'}}>
+            {boxEmoji}
+          </div>
+          <div style={{fontSize:34,fontWeight:900,letterSpacing:5,color:rc,marginBottom:8,
+            textShadow:`0 0 24px ${rc}, 0 0 48px ${rc}66`,
+            animation:'rarity-pop 0.5s cubic-bezier(0.34,1.56,0.64,1) .08s both'}}>
+            ✨ {item.rarity} ✨
+          </div>
+          {isUltra && <div style={{fontSize:13,color:rc,fontWeight:700,animation:'fade-in .4s .3s both',
+            textShadow:`0 0 12px ${rc}`}}>🔥🔥🔥 หายากมากที่สุด! 🔥🔥🔥</div>}
+          {isRare&&!isUltra && <div style={{fontSize:11,color:rc,opacity:.8,animation:'fade-in .4s .3s both'}}>⭐ หายาก! ⭐</div>}
+        </>)}
+
+        {/* ── REVEALED ── */}
+        {phase==='revealed' && (<>
+          {/* Sparks */}
+          {sparks.map((s,i)=>(
+            <div key={i} style={{position:'absolute',top:'38%',left:'50%',width:8,height:8,borderRadius:'50%',
+              background:rc,pointerEvents:'none',
+              '--dx':s.dx,'--dy':s.dy,
+              animation:`spark-out 0.7s ease-out ${i*0.06}s both`}}/>
+          ))}
+          <div style={{fontSize:11,color:rc,letterSpacing:3,marginBottom:12,animation:'fade-in .3s',textTransform:'uppercase'}}>
+            ได้รับ!
+          </div>
+          <div style={{fontSize:80,lineHeight:1,display:'inline-block',marginBottom:12,
+            filter:`drop-shadow(0 0 20px ${rc})`,animation:'gacha-reveal 0.5s cubic-bezier(0.34,1.56,0.64,1)'}}>
+            {item.emoji}
+          </div>
+          <div style={{display:'inline-block',padding:'3px 14px',borderRadius:20,
+            background:`${rc}18`,border:`1px solid ${rc}44`,
+            fontSize:11,fontWeight:700,color:rc,letterSpacing:2,marginBottom:8,
+            animation:'gacha-reveal 0.5s .1s both',textShadow:`0 0 8px ${rc}88`}}>
+            {item.rarity}
+          </div>
+          <div style={{fontSize:17,fontWeight:700,color:'#fff',marginBottom:6,padding:'0 8px',
+            animation:'gacha-reveal 0.5s .18s both'}}>
+            {item.name}
+          </div>
+          <div style={{fontSize:11,color:'#ffffff44',marginBottom:20,animation:'fade-in .5s .3s both'}}>
+            มูลค่าประเมิน ≈ ฿{item.bp.toLocaleString()}
+          </div>
+          <button onClick={onClose} style={{
+            width:'100%',padding:'13px 0',borderRadius:14,cursor:'pointer',fontFamily:G.font,
+            border:`1px solid ${rc}55`,background:`${rc}18`,
+            color:rc,fontSize:13,fontWeight:700,letterSpacing:1,
+            animation:'gacha-reveal 0.5s .35s both',
+            boxShadow:`0 0 20px ${rc}22`,
+          }}>
+            🎊 รับของแล้ว!
+          </button>
+          {phase==='revealed'&&<div style={{fontSize:9,color:'#ffffff22',marginTop:10,animation:'fade-in .5s .6s both'}}>
+            แตะด้านนอกเพื่อปิด
+          </div>}
+        </>)}
+      </div>
+    </div>
+  );
+}
+
 // ── GAME SCREEN ──
 function GameScreen({ session, initPlayers, client, onEnd }) {
   const cfg       = MODES[session.mode];
@@ -2671,6 +2836,7 @@ function GameScreen({ session, initPlayers, client, onEnd }) {
   const auctionR = useRef({phase:"idle",countdown:25,asset:null,currentBid:500,currentBidder:null,window:0,ownerNick:null,ownerExpiry:0});
   const [auction, setAuction] = useState(null);
   const [bidInput, setBidInput] = useState(500);
+  const [openingItem, setOpeningItem] = useState(null); // gacha animation state: {item, boxType}
 
   // ── NEW: flash / ticker / trade history / confetti ──
   const [flashMap,      setFlashMap]     = useState({});
@@ -2771,12 +2937,17 @@ function GameScreen({ session, initPlayers, client, onEnd }) {
                   rs2.positions=rs2.positions.map((p,i)=>Math.min(100,p+rs2.velocities[i]+(i===sW&&p>60?0.5:0)));
                   if(Math.max(...rs2.positions)>=95) rs2.positions[sW]=100;
                   const fi=rs2.positions.findIndex(p=>p>=100);
-                  if(fi>=0){rs2.winner=fi;rs2.phase='result';rs2.won=rs2.playerBet?.horse===fi;setRace({...rs2});clearInterval(racingSubIdR.current);racingSubIdR.current=null;}
-                  else setRace({...rs2});
+                  if(fi>=0){
+                    // Visually freeze at finish line — server TICK will confirm phase='result'
+                    rs2.positions[fi]=100;
+                    setRace({...rs2});
+                    clearInterval(racingSubIdR.current); racingSubIdR.current=null;
+                  } else { setRace({...rs2}); }
                 },250);
               } else if(sr.phase==='result') {
                 if(racingSubIdR.current){clearInterval(racingSubIdR.current);racingSubIdR.current=null;}
                 if(prevP==='racing') cr.positions=cr.positions.map((p,i)=>i===sr.winner?100:Math.min(99,p));
+                cr.won = cr.playerBet?.horse === sr.winner;
                 setRace({...cr});
               } else { // break
                 if(racingSubIdR.current){clearInterval(racingSubIdR.current);racingSubIdR.current=null;}
@@ -2822,6 +2993,8 @@ function GameScreen({ session, initPlayers, client, onEnd }) {
           break;
         case "RACE_RESULT":
           { const pb2=raceR.current.playerBet;
+            raceR.current.won = pb2?.horse === msg.winner;
+            raceR.current.winner = msg.winner;
             if(pb2) {
               if(pb2.horse===msg.winner){ _snd.play('jackpot'); setConfetti(true); setTimeout(()=>setConfetti(false),3000); showNotif(`🏆 ${msg.winnerEmoji} ${msg.winnerName} ชนะ!`,"#fbbf24"); }
               else { _snd.play('bust'); showNotif(`💔 ${msg.winnerEmoji} ${msg.winnerName} ชนะ — เสีย ${fmt(pb2.amount)}`,"#f87171"); }
@@ -2937,9 +3110,56 @@ function GameScreen({ session, initPlayers, client, onEnd }) {
           setCash(cashR.current); setHold({...holdR.current});
           if(msg.prices){ priceR.current={...msg.prices}; setPrices({...msg.prices}); }
           break;
+        case "STATE":
+          if(msg.cash!==undefined){ cashR.current=msg.cash; syncCash(); }
+          if(msg.hold){ holdR.current={...msg.hold}; setHold({...holdR.current}); }
+          if(msg.basis){ basisR.current={...msg.basis}; setBasis({...basisR.current}); }
+          if(msg.short){ shortR.current={...msg.short}; setShort({...shortR.current}); }
+          if(msg.gWin!==undefined){ gWinR.current=msg.gWin; setGWin(msg.gWin); }
+          if(msg.gLoss!==undefined){ gLossR.current=msg.gLoss; setGLoss(msg.gLoss); }
+          if(msg.prices){ priceR.current={...msg.prices}; setPrices({...msg.prices}); }
+          if(msg.hypeIdx){ hypeIdxR.current={...msg.hypeIdx}; setHypeIdx({...msg.hypeIdx}); }
+          if(msg.race){
+            const sr=msg.race, cr=raceR.current;
+            cr.phase=sr.phase; cr.breakTick=sr.breakTick||0; cr.betTick=sr.betTick||0;
+            cr.racingTick=sr.racingTick||0; cr.winner=sr.winner;
+            cr.npcBets=sr.npcBets||[[],[],[],[],[]]; cr.onlineBets=sr.playerBets||[];
+            if(sr.myBet){ cr.playerBet=sr.myBet; setRacePickedHorse(sr.myBet.horse); }
+            if(sr.phase==='racing' && !racingSubIdR.current){
+              cr.positions=[0,0,0,0,0]; cr.velocities=HORSE_NAMES.map(()=>1.5+Math.random()*1.5);
+              const sWs=sr.winner;
+              racingSubIdR.current=setInterval(()=>{
+                const rs2=raceR.current;
+                if(rs2.phase!=='racing'){clearInterval(racingSubIdR.current);racingSubIdR.current=null;return;}
+                rs2.velocities=rs2.velocities.map(v=>Math.max(0.5,Math.min(4,v+(Math.random()-0.5)*1.5)));
+                rs2.positions=rs2.positions.map((p,i)=>Math.min(100,p+rs2.velocities[i]+(i===sWs&&p>60?0.5:0)));
+                if(Math.max(...rs2.positions)>=95) rs2.positions[sWs]=100;
+                const fi=rs2.positions.findIndex(p=>p>=100);
+                if(fi>=0){rs2.positions[fi]=100;setRace({...rs2});clearInterval(racingSubIdR.current);racingSubIdR.current=null;}
+                else setRace({...rs2});
+              },250);
+            }
+            setRace({...cr});
+          }
+          if(msg.auction){
+            const sa=msg.auction;
+            if(sa.phase==='bidding'){
+              const aAsset=ASSETS.find(a=>a.id===sa.assetId)||{id:sa.assetId,name:sa.assetId,emoji:'🏷️',bp:0};
+              auctionR.current={phase:'bidding',asset:aAsset,currentBid:sa.currentBid,
+                currentBidder:sa.currentBidderNick===session.nick?'player':(sa.currentBidderNick||null),
+                window:sa.window,ownerNick:null,ownerExpiry:0};
+              setAuction({...auctionR.current}); setBidInput(sa.currentBid+200);
+            } else if(sa.phase==='owned'){
+              const aAsset=ASSETS.find(a=>a.id===sa.assetId)||{id:sa.assetId,name:sa.assetId,emoji:'🏷️',bp:0};
+              auctionR.current={phase:'owned',asset:aAsset,currentBid:sa.currentBid,currentBidder:sa.currentBidderNick,
+                window:0,ownerNick:sa.ownerNick,ownerExpiry:sa.ownerExpiry};
+              setAuction({...auctionR.current});
+            }
+          }
+          break;
       }
     };
-    return () => { client.cb = origCb; };
+    return () => { onlineRef.current=false; client.cb = origCb; };
   }, [client, session.nick]);
 
   const showNotif = useCallback((msg, color="#4ade80") => {
@@ -3033,7 +3253,8 @@ function GameScreen({ session, initPlayers, client, onEnd }) {
     const item = genHypeItem(type);
     hypeInvR.current = [...hypeInvR.current, item];
     setHypeInv([...hypeInvR.current]);
-    showNotif(`📦 ได้ ${item.emoji} ${item.name}`, item.rarityColor);
+    // Show animated gacha reveal modal
+    setOpeningItem({ item, boxType: type });
     addChatMsg(session.nick, `ได้ ${item.emoji} ${item.name} มา!`, true);
   };
 
@@ -4060,6 +4281,35 @@ const myRank = allP.findIndex(p=>p.isMe)+1;
         </div>
       )}
 
+      {/* ── RACE BANNER ── */}
+      {(race.phase==='betting'||race.phase==='racing'||race.phase==='result') && (
+        <div onClick={()=>setModal('horserace')} style={{margin:"5px 14px 0",padding:"10px 14px",borderRadius:11,
+          background:"linear-gradient(135deg,#78350f12,#fbbf2408)",border:"1px solid #fbbf2430",
+          cursor:"pointer",animation:"event-banner-in 0.4s cubic-bezier(0.34,1.56,0.64,1)"}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+            <div>
+              <div style={{fontSize:8,letterSpacing:3,color:"#fbbf2466",marginBottom:1}}>🏇 HORSE RACE</div>
+              <div style={{color:"#fbbf24",fontWeight:700,fontSize:12}}>
+                {race.phase==='betting'?`เปิดเดิมพัน — ${race.betTick}s รีบเลย!`:
+                 race.phase==='racing'?'กำลังแข่ง! 🏁':
+                 race.winner>=0?`${HORSE_EMOJIS[race.winner]} ${HORSE_NAMES[race.winner]} ชนะ!`:'ผลการแข่ง'}
+              </div>
+            </div>
+            <div style={{textAlign:"right",flexShrink:0,marginLeft:8}}>
+              {race.phase==='betting'&&!race.playerBet&&<div style={{fontSize:9,color:"#fbbf2466"}}>แตะเพื่อเดิมพัน →</div>}
+              {race.phase==='betting'&&race.playerBet&&<div style={{fontSize:9,color:HORSE_COLORS[race.playerBet.horse],fontWeight:700}}>
+                {HORSE_EMOJIS[race.playerBet.horse]} ฿{race.playerBet.amount?.toLocaleString()}
+              </div>}
+              {race.phase==='racing'&&race.playerBet&&<div style={{fontSize:9,color:"#fbbf2466"}}>ลุ้น ×2.4</div>}
+              {race.phase==='result'&&race.winner>=0&&race.playerBet&&<div style={{fontSize:10,fontWeight:700,
+                color:race.playerBet.horse===race.winner?"#4ade80":"#f87171"}}>
+                {race.playerBet.horse===race.winner?`🏆 +฿${(Math.round(race.playerBet.amount*2.4)-race.playerBet.amount).toLocaleString()}`:'💔 เสียเดิมพัน'}
+              </div>}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ── AUCTION BANNER ── */}
       {auction && (
         <div style={{margin:"5px 14px",padding:"10px 14px",borderRadius:11,
@@ -4934,6 +5184,9 @@ const myRank = allP.findIndex(p=>p.isMe)+1;
       {modal==="horserace" && <HorseRaceWatchModal raceR={raceR} pickedHorse={racePickedHorse} onPickHorse={setRacePickedHorse} onBet={doRaceBet} cash={cash} onClose={()=>setModal(null)}/>}
       {betSelectId && <BetSelectorModal gameId={betSelectId} cash={cash} onConfirm={(b)=>openGamble(betSelectId,b)} onClose={()=>setBetSelectId(null)}/>}
 
+      {/* GACHA ANIMATION MODAL */}
+      {openingItem && <GachaOpenModal item={openingItem.item} boxType={openingItem.boxType} onClose={()=>setOpeningItem(null)}/>}
+
       {/* ADMIN PANEL — โผล่หลังพิม adminNPY ครั้งแรก */}
       {adminVisible && <AdminPanel onCmd={handleAdminCmd}/>}
     </div>
@@ -5077,6 +5330,14 @@ ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
 </script>
 <style>
 @keyframes spin { to { transform: rotate(360deg); } }
+@keyframes box-shake { 0%,100%{transform:rotate(-10deg) scale(1.1)} 25%{transform:rotate(10deg) scale(1.15)} 50%{transform:rotate(-7deg) scale(1.08)} 75%{transform:rotate(7deg) scale(1.12)} }
+@keyframes box-spin { 0%{transform:rotate(0deg) scale(1)} 25%{transform:rotate(-15deg) scale(1.1)} 50%{transform:rotate(15deg) scale(1.05)} 75%{transform:rotate(-10deg) scale(1.12)} 100%{transform:rotate(0deg) scale(1)} }
+@keyframes rarity-pop { 0%{transform:scale(0.2) rotate(-15deg);opacity:0} 60%{transform:scale(1.18) rotate(4deg)} 80%{transform:scale(0.96) rotate(-1deg)} 100%{transform:scale(1) rotate(0deg);opacity:1} }
+@keyframes gacha-reveal { 0%{transform:translateY(30px) scale(0.85);opacity:0} 70%{transform:translateY(-6px) scale(1.03)} 100%{transform:translateY(0) scale(1);opacity:1} }
+@keyframes gacha-glow-pulse { 0%,100%{opacity:0.5;transform:scale(1)} 50%{opacity:1;transform:scale(1.08)} }
+@keyframes slot-tick { 0%{transform:translateY(-100%);opacity:0} 20%{transform:translateY(0);opacity:1} 80%{transform:translateY(0);opacity:1} 100%{transform:translateY(100%);opacity:0} }
+@keyframes gacha-bar { from{width:0%} to{width:100%} }
+@keyframes spark-out { 0%{transform:translate(0,0) scale(1);opacity:1} 100%{transform:translate(var(--dx),var(--dy)) scale(0);opacity:0} }
 @keyframes ticker-scroll { from { transform: translateX(0); } to { transform: translateX(-50%); } }
 @keyframes price-flash-up { 0%,100%{ background:transparent; } 30%{ background:#4ade8028; box-shadow: inset 0 0 14px #4ade8015; } }
 @keyframes price-flash-dn { 0%,100%{ background:transparent; } 30%{ background:#f8717128; box-shadow: inset 0 0 14px #f8717115; } }
