@@ -3005,7 +3005,7 @@ function GameScreen({ session, initPlayers, client, onEnd }) {
           raceR.current.onlineBets=msg.playerBets||[]; setRace({...raceR.current});
           break;
         case "RACE_BET_RESULT":
-          if(msg.ok){ cashR.current=msg.cash; syncCash(); raceR.current.playerBet={horse:msg.horse,amount:msg.amount}; setRace({...raceR.current}); setRacePickedHorse(msg.horse); showNotif(`🐎 เดิมพัน ${HORSE_EMOJIS[msg.horse]} ${HORSE_NAMES[msg.horse]} ฿${msg.amount.toLocaleString()}`,HORSE_COLORS[msg.horse]); }
+          if(msg.ok){ applyServerCash(msg.cash); raceR.current.playerBet={horse:msg.horse,amount:msg.amount}; setRace({...raceR.current}); setRacePickedHorse(msg.horse); showNotif(`🐎 เดิมพัน ${HORSE_EMOJIS[msg.horse]} ${HORSE_NAMES[msg.horse]} ฿${msg.amount.toLocaleString()}`,HORSE_COLORS[msg.horse]); }
           else showNotif(`❌ ${msg.msg}`,"#f87171");
           break;
         case "AUCTION_START":
@@ -3025,7 +3025,7 @@ function GameScreen({ session, initPlayers, client, onEnd }) {
           }
           break;
         case "AUCTION_BID_RESULT":
-          if(msg.ok){ cashR.current=msg.cash; syncCash(); if(auctionR.current){auctionR.current.currentBidder='player'; setBidInput((auctionR.current.currentBid||0)+200); setAuction({...auctionR.current});} showNotif(`🔨 Bid ฿${auctionR.current?.currentBid?.toLocaleString()} — คุณนำอยู่!`,"#c084fc"); }
+          if(msg.ok){ applyServerCash(msg.cash); if(auctionR.current){auctionR.current.currentBidder='player'; setBidInput((auctionR.current.currentBid||0)+200); setAuction({...auctionR.current});} showNotif(`🔨 Bid ฿${auctionR.current?.currentBid?.toLocaleString()} — คุณนำอยู่!`,"#c084fc"); }
           else showNotif(`❌ ${msg.msg}`,"#f87171");
           break;
         case "AUCTION_END":
@@ -3039,7 +3039,7 @@ function GameScreen({ session, initPlayers, client, onEnd }) {
           break;
         case "TRADE_RESULT":
           if(msg.ok){
-            cashR.current=msg.cash; setCash(msg.cash);
+            applyServerCash(msg.cash);
             if(msg.hold){ holdR.current={...msg.hold}; setHold({...msg.hold}); }
             if(msg.short){ shortR.current={...msg.short}; setShort({...msg.short}); }
             if(msg.action==="buy" && msg.assetId && msg.cost){
@@ -3084,7 +3084,7 @@ function GameScreen({ session, initPlayers, client, onEnd }) {
           break;
         case "GAMBLE_RESULT":
           if(msg.ok){
-            cashR.current=msg.cash; setCash(msg.cash);
+            applyServerCash(msg.cash);
             gWinR.current=msg.gWin||0; gLossR.current=msg.gLoss||0;
             setGWin(gWinR.current); setGLoss(gLossR.current);
             if (msg.win && msg.amount>=3000) { _snd.play('jackpot'); setConfetti(true); setTimeout(()=>setConfetti(false),4000); }
@@ -3105,13 +3105,14 @@ function GameScreen({ session, initPlayers, client, onEnd }) {
           showNotif(`${msg.nick} หลุดออกจากเกม`,"#f87171");
           break;
         case "REJOINED":
-          cashR.current=msg.cash||cashR.current; holdR.current=msg.hold||{};
+          if(msg.cash!==undefined) applyServerCash(msg.cash); else { syncCash(); syncBank(); }
+          holdR.current=msg.hold||{};
           if(msg.short){ shortR.current={...msg.short}; setShort({...msg.short}); }
-          setCash(cashR.current); setHold({...holdR.current});
+          setHold({...holdR.current});
           if(msg.prices){ priceR.current={...msg.prices}; setPrices({...msg.prices}); }
           break;
         case "STATE":
-          if(msg.cash!==undefined){ cashR.current=msg.cash; syncCash(); }
+          if(msg.cash!==undefined) applyServerCash(msg.cash);
           if(msg.hold){ holdR.current={...msg.hold}; setHold({...holdR.current}); }
           if(msg.basis){ basisR.current={...msg.basis}; setBasis({...basisR.current}); }
           if(msg.short){ shortR.current={...msg.short}; setShort({...shortR.current}); }
@@ -3160,7 +3161,7 @@ function GameScreen({ session, initPlayers, client, onEnd }) {
       }
     };
     return () => { onlineRef.current=false; client.cb = origCb; };
-  }, [client, session.nick]);
+  }, [client, session.nick, applyServerCash]);
 
   const showNotif = useCallback((msg, color="#4ade80") => {
     setNotif({msg,color,id:Date.now()});
@@ -3192,6 +3193,13 @@ function GameScreen({ session, initPlayers, client, onEnd }) {
 
   const syncCash  = useCallback(() => setCash(cashR.current), []);
   const syncBank  = useCallback(() => setBank(bankR.current), []);
+  // ออนไลน์: server ส่ง total cash (= cashR+bankR) — กระจายด้วย bank คงที่ก่อน
+  const applyServerCash = useCallback((total) => {
+    const delta = total - (cashR.current + bankR.current);
+    bankR.current = Math.max(0, bankR.current + delta);
+    cashR.current = Math.max(0, total - bankR.current);
+    syncCash(); syncBank();
+  }, [syncCash, syncBank]);
   const syncHold  = () => setHold({...holdR.current});
 
   const BANK_FEE = 0.015;
@@ -4282,20 +4290,22 @@ const myRank = allP.findIndex(p=>p.isMe)+1;
       )}
 
       {/* ── RACE BANNER ── */}
-      {(race.phase==='betting'||race.phase==='racing'||race.phase==='result') && (
+      {(race.phase==='break'||race.phase==='betting'||race.phase==='racing'||race.phase==='result') && (
         <div onClick={()=>setModal('horserace')} style={{margin:"5px 14px 0",padding:"10px 14px",borderRadius:11,
           background:"linear-gradient(135deg,#78350f12,#fbbf2408)",border:"1px solid #fbbf2430",
           cursor:"pointer",animation:"event-banner-in 0.4s cubic-bezier(0.34,1.56,0.64,1)"}}>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
             <div>
               <div style={{fontSize:8,letterSpacing:3,color:"#fbbf2466",marginBottom:1}}>🏇 HORSE RACE</div>
-              <div style={{color:"#fbbf24",fontWeight:700,fontSize:12}}>
-                {race.phase==='betting'?`เปิดเดิมพัน — ${race.betTick}s รีบเลย!`:
+              <div style={{color:race.phase==='break'?"#ffffff55":"#fbbf24",fontWeight:700,fontSize:12}}>
+                {race.phase==='break'?`แข่งม้าใน ${race.breakTick}s`:
+                 race.phase==='betting'?`เปิดเดิมพัน — ${race.betTick}s รีบเลย!`:
                  race.phase==='racing'?'กำลังแข่ง! 🏁':
                  race.winner>=0?`${HORSE_EMOJIS[race.winner]} ${HORSE_NAMES[race.winner]} ชนะ!`:'ผลการแข่ง'}
               </div>
             </div>
             <div style={{textAlign:"right",flexShrink:0,marginLeft:8}}>
+              {race.phase==='break'&&<div style={{fontSize:9,color:"#ffffff22"}}>แตะเพื่อดู →</div>}
               {race.phase==='betting'&&!race.playerBet&&<div style={{fontSize:9,color:"#fbbf2466"}}>แตะเพื่อเดิมพัน →</div>}
               {race.phase==='betting'&&race.playerBet&&<div style={{fontSize:9,color:HORSE_COLORS[race.playerBet.horse],fontWeight:700}}>
                 {HORSE_EMOJIS[race.playerBet.horse]} ฿{race.playerBet.amount?.toLocaleString()}
@@ -4334,7 +4344,7 @@ const myRank = allP.findIndex(p=>p.isMe)+1;
           </div>
           {auction.phase==='bidding' && (
             <div style={{display:"flex",gap:5,alignItems:"center",flexWrap:"wrap"}}>
-              {[auction.currentBid+200,auction.currentBid+500,auction.currentBid+1000].filter(v=>v<=cashR.current+(auction.currentBidder==="player"?auction.currentBid:0)).map(v=>(
+              {[auction.currentBid+200,auction.currentBid+500,auction.currentBid+1000].filter(v=>v<=(onlineRef.current?cash+bank:cashR.current)+(auction.currentBidder==="player"?auction.currentBid:0)).map(v=>(
                 <button key={v} onClick={()=>doBid(v)} style={{
                   padding:"5px 9px",borderRadius:7,cursor:"pointer",fontFamily:G.font,fontSize:10,fontWeight:700,
                   border:"1px solid #c084fc33",background:"#c084fc10",color:"#c084fc",
