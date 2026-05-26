@@ -1600,9 +1600,11 @@ function HorseRaceWatchModal({ cash, onBet, onWin, onLose, onClose }) {
   const [phase, setPhase] = useState('pick'); // pick | racing | result
   const [picked, setPicked] = useState(-1);
   const [positions, setPositions] = useState([0,0,0,0,0]);
+  const [vels, setVels] = useState([0.3,0.3,0.3,0.3,0.3]);
   const [winner, setWinner] = useState(-1);
-  const [playerBet, setPlayerBet] = useState(null); // {horse, amount}
+  const [playerBet, setPlayerBet] = useState(null);
   const [won, setWon] = useState(false);
+  const [finalStretch, setFinalStretch] = useState(false);
   const [npcBets] = useState(() => {
     const b = [[],[],[],[],[]];
     for (let i = 0; i < 3 + Math.floor(Math.random()*5); i++) {
@@ -1613,7 +1615,7 @@ function HorseRaceWatchModal({ cash, onBet, onWin, onLose, onClose }) {
   });
   const ivRef  = useRef(null);
   const posRef = useRef([0,0,0,0,0]);
-  const velRef = useRef([1.5,1.5,1.5,1.5,1.5]);
+  const velRef = useRef([0.3,0.3,0.3,0.3,0.3]);
   const winRef = useRef(-1);
 
   useEffect(() => () => { if (ivRef.current) clearInterval(ivRef.current); }, []);
@@ -1623,17 +1625,23 @@ function HorseRaceWatchModal({ cash, onBet, onWin, onLose, onClose }) {
     const w = Math.floor(Math.random() * 5);
     winRef.current = w;
     posRef.current = [0,0,0,0,0];
-    velRef.current = HORSE_NAMES.map(() => 1.5 + Math.random() * 1.5);
+    velRef.current = HORSE_NAMES.map(() => 0.3 + Math.random() * 0.3);
     setPlayerBet({horse, amount});
     setPositions([0,0,0,0,0]);
+    setVels([0.3,0.3,0.3,0.3,0.3]);
+    setFinalStretch(false);
     setPhase('racing');
     ivRef.current = setInterval(() => {
-      velRef.current = velRef.current.map(v => Math.max(0.5, Math.min(4, v + (Math.random()-0.5)*1.5)));
+      velRef.current = velRef.current.map(v => Math.max(0.1, Math.min(0.8, v + (Math.random()-0.5)*0.12)));
       posRef.current = posRef.current.map((p,i) =>
-        Math.min(100, p + velRef.current[i] + (i===winRef.current && p>62 ? 0.8 : 0))
+        Math.min(100, p + velRef.current[i] + (i===winRef.current && p>62 ? 0.16 : 0))
       );
       if (Math.max(...posRef.current) >= 94) posRef.current[winRef.current] = 100;
-      setPositions([...posRef.current]);
+      const snap = [...posRef.current];
+      const vsnap = [...velRef.current];
+      setPositions(snap);
+      setVels(vsnap);
+      if (Math.max(...snap) > 70) setFinalStretch(true);
       if (posRef.current[winRef.current] >= 100) {
         clearInterval(ivRef.current); ivRef.current = null;
         const didWin = horse === winRef.current;
@@ -1641,41 +1649,71 @@ function HorseRaceWatchModal({ cash, onBet, onWin, onLose, onClose }) {
         if (didWin) onWin(Math.round(amount * 2.4));
         else onLose();
       }
-    }, 250);
+    }, 50);
   };
 
   const resetRace = () => {
     setPicked(-1); setPhase('pick');
-    setPositions([0,0,0,0,0]); setWinner(-1);
-    setPlayerBet(null); setWon(false);
+    setPositions([0,0,0,0,0]); setVels([0.3,0.3,0.3,0.3,0.3]);
+    setWinner(-1); setPlayerBet(null); setWon(false); setFinalStretch(false);
   };
 
   const Track = () => {
-    const leadIdx = phase==='racing' ? positions.indexOf(Math.max(...positions)) : -1;
+    const leadIdx = phase==='racing' ? positions.indexOf(Math.max(...positions)) : winner;
+    const nearFinish = Math.max(...positions) > 80;
     return (
-      <div style={{background:"linear-gradient(180deg,#0a1628,#0d1f3a)",borderRadius:14,padding:"12px 10px",marginBottom:12,border:"1px solid #ffffff08"}}>
+      <div style={{background:"linear-gradient(180deg,#071020,#0a1a30)",borderRadius:14,padding:"12px 10px",marginBottom:10,
+        border:`1px solid ${nearFinish?"#fbbf2435":"#ffffff08"}`,transition:"border-color .4s",position:"relative"}}>
+        {/* finish flag */}
+        <div style={{position:"absolute",right:10,top:4,fontSize:10,opacity:.35}}>🏁</div>
         {HORSE_NAMES.map((name,i) => {
-          const isBet = playerBet?.horse===i, isWin = winner===i && phase==='result', isLead = leadIdx===i && phase==='racing';
+          const isBet = playerBet?.horse===i;
+          const isWin = winner===i && phase==='result';
+          const isLead = leadIdx===i && phase==='racing';
+          const pos = positions[i];
+          const spd = vels[i];
+          const gallopDur = `${Math.max(0.2, 0.38 - spd * 0.12).toFixed(2)}s`;
           return (
             <div key={i} style={{marginBottom:i<4?10:0}}>
-              <div style={{display:"flex",justifyContent:"space-between",marginBottom:3,fontSize:10}}>
-                <span style={{color:isWin?"#fbbf24":isBet?HORSE_COLORS[i]:isLead?"#4ade80":"#ffffff44",fontWeight:isBet||isWin||isLead?700:400}}>
-                  {HORSE_EMOJIS[i]} {name}
-                  {isLead&&<span style={{color:"#4ade80",marginLeft:4,fontSize:8}}>🔥นำ</span>}
-                  {isBet&&!isWin&&<span style={{color:HORSE_COLORS[i],marginLeft:4}}>★</span>}
+              <div style={{display:"flex",justifyContent:"space-between",marginBottom:2,fontSize:10}}>
+                <span style={{color:isWin?"#fbbf24":isBet?HORSE_COLORS[i]:isLead?"#4ade80":"#ffffff44",fontWeight:isBet||isWin||isLead?700:400,transition:"color .2s"}}>
+                  {name}
+                  {isLead&&<span style={{color:"#4ade80",marginLeft:5,fontSize:8,animation:"glow-pulse .8s ease infinite"}}>🔥</span>}
+                  {isBet&&!isWin&&<span style={{color:HORSE_COLORS[i],marginLeft:4,fontSize:9}}>★</span>}
                   {isWin&&<span style={{marginLeft:4}}>🏆</span>}
                 </span>
-                <span style={{color:"#ffffff28",fontSize:8}}>{Math.round(positions[i])}m</span>
+                <span style={{color:"#ffffff22",fontSize:8}}>{Math.round(pos)}m</span>
               </div>
-              <div style={{height:26,background:"#ffffff06",borderRadius:8,overflow:"visible",position:"relative",border:`1px solid ${isWin?"#fbbf2430":isBet?HORSE_COLORS[i]+"20":"#ffffff08"}`}}>
-                {[25,50,75].map(p=><div key={p} style={{position:"absolute",left:`${p}%`,top:0,bottom:0,width:1,background:"#ffffff08"}}/>)}
-                <div style={{position:"absolute",left:0,top:0,bottom:0,width:`${positions[i]}%`,
-                  background:isWin?`linear-gradient(90deg,${HORSE_COLORS[i]}20,${HORSE_COLORS[i]}40)`:isBet?`linear-gradient(90deg,${HORSE_COLORS[i]}12,${HORSE_COLORS[i]}28)`:"#ffffff08",
-                  borderRadius:7,transition:"width .22s linear"}}/>
-                <div style={{position:"absolute",left:`${Math.max(0,Math.min(positions[i],93))}%`,top:"50%",transform:"translateY(-50%)",
-                  fontSize:18,lineHeight:1,transition:"left .22s linear",zIndex:2,
-                  filter:isWin?"drop-shadow(0 0 8px gold)":isLead?"drop-shadow(0 0 5px #4ade80)":undefined}}>
-                  {HORSE_EMOJIS[i]}
+              <div style={{height:28,background:"#ffffff05",borderRadius:8,overflow:"visible",position:"relative",
+                border:`1px solid ${isWin?"#fbbf2440":isLead&&phase==='racing'?"#4ade8030":isBet?HORSE_COLORS[i]+"25":"#ffffff08"}`,
+                boxShadow:isLead&&phase==='racing'?`0 0 14px #4ade8018`:undefined,transition:"border-color .3s,box-shadow .3s"}}>
+                {/* lane markers */}
+                {[25,50,75].map(p=><div key={p} style={{position:"absolute",left:`${p}%`,top:0,bottom:0,width:1,background:"#ffffff06",zIndex:0}}/>)}
+                {/* finish line */}
+                <div style={{position:"absolute",right:1,top:0,bottom:0,width:2,
+                  background:"repeating-linear-gradient(180deg,#ffffff30 0px,#ffffff30 3px,transparent 3px,transparent 6px)",borderRadius:"0 7px 7px 0"}}/>
+                {/* progress fill */}
+                <div style={{position:"absolute",left:0,top:0,bottom:0,width:`${pos}%`,
+                  background:isWin?`linear-gradient(90deg,${HORSE_COLORS[i]}18,${HORSE_COLORS[i]}50)`:
+                    isLead&&phase==='racing'?`linear-gradient(90deg,${HORSE_COLORS[i]}10,${HORSE_COLORS[i]}38)`:
+                    isBet?`linear-gradient(90deg,${HORSE_COLORS[i]}08,${HORSE_COLORS[i]}22)`:"#ffffff05",
+                  borderRadius:7,transition:"width .05s linear"}}/>
+                {/* speed streak behind fast horses */}
+                {phase==='racing' && pos>4 && spd>0.42 && (
+                  <div style={{position:"absolute",
+                    left:`${Math.max(0,pos-10)}%`,top:"20%",bottom:"20%",
+                    width:`${Math.min(14, spd*22)}%`,
+                    background:`linear-gradient(90deg,transparent,${HORSE_COLORS[i]}${spd>0.6?"38":"20"})`,
+                    borderRadius:"0 4px 4px 0",pointerEvents:"none",transition:"none"}}/>
+                )}
+                {/* horse emoji with gallop bounce */}
+                <div style={{position:"absolute",left:`${Math.max(0,Math.min(pos,91))}%`,top:"50%",transform:"translateY(-50%)",
+                  fontSize:20,lineHeight:1,zIndex:3,transition:"none",
+                  filter:isWin?"drop-shadow(0 0 12px gold)":isLead&&phase==='racing'?"drop-shadow(0 0 7px #4ade80)":undefined}}>
+                  <span style={{display:"block",
+                    animation:phase==='racing'?`horseGallop ${gallopDur} ease-in-out infinite`:"none"}}>
+                    {HORSE_EMOJIS[i]}
+                  </span>
                 </div>
               </div>
             </div>
@@ -1687,6 +1725,7 @@ function HorseRaceWatchModal({ cash, onBet, onWin, onLose, onClose }) {
 
   return (
     <Modal onClose={onClose} title="🏇 แข่งม้า">
+
       {/* PICK */}
       {phase==='pick' && (
         <div>
@@ -1704,9 +1743,9 @@ function HorseRaceWatchModal({ cash, onBet, onWin, onLose, onClose }) {
                   border:`1px solid ${isPick?HORSE_COLORS[i]+"55":"#ffffff12"}`,
                   background:isPick?`${HORSE_COLORS[i]}14`:"#ffffff04",
                   display:"flex",justifyContent:"space-between",alignItems:"center",transition:"all .15s",
-                  boxShadow:isPick?`0 0 14px ${HORSE_COLORS[i]}22`:undefined}}>
+                  boxShadow:isPick?`0 0 16px ${HORSE_COLORS[i]}25`:undefined}}>
                   <div style={{display:"flex",alignItems:"center",gap:10}}>
-                    <span style={{fontSize:22}}>{HORSE_EMOJIS[i]}</span>
+                    <span style={{fontSize:24}}>{HORSE_EMOJIS[i]}</span>
                     <div style={{color:isPick?HORSE_COLORS[i]:"#ffffff88",fontWeight:700,fontSize:12}}>{name}</div>
                   </div>
                   {npc.length>0&&<div style={{fontSize:8,color:"#ffffff28"}}>{npc.join(' · ')}</div>}
@@ -1716,11 +1755,11 @@ function HorseRaceWatchModal({ cash, onBet, onWin, onLose, onClose }) {
           </div>
           {picked>=0 && (
             <div style={{marginBottom:8}}>
-              <div style={{fontSize:10,color:HORSE_COLORS[picked],marginBottom:6,fontWeight:700}}>
+              <div style={{fontSize:10,color:HORSE_COLORS[picked],marginBottom:7,fontWeight:700}}>
                 เดิมพัน {HORSE_EMOJIS[picked]} {HORSE_NAMES[picked]}:
               </div>
               <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
-                {[100,300,500,1000,2000].filter(v=>v<=cash).map(v=>(
+                {[100,300,500,1000,2000,5000].filter(v=>v<=cash).map(v=>(
                   <button key={v} onClick={()=>startRace(picked,v)} style={{
                     padding:"9px 14px",borderRadius:9,cursor:"pointer",fontFamily:G.font,
                     border:`1px solid ${HORSE_COLORS[picked]}40`,
@@ -1731,19 +1770,22 @@ function HorseRaceWatchModal({ cash, onBet, onWin, onLose, onClose }) {
               </div>
             </div>
           )}
-          <div style={{textAlign:"center",marginTop:10,fontSize:9,color:"#ffffff22"}}>เลือกม้า → กดจำนวนเดิมพัน → แข่งเลย!</div>
+          <div style={{textAlign:"center",marginTop:10,fontSize:9,color:"#ffffff22"}}>เลือกม้า → กดเดิมพัน → แข่งเลย!</div>
         </div>
       )}
 
       {/* RACING */}
       {phase==='racing' && (
         <div>
-          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
-            <div style={{fontSize:11,color:"#4ade80",fontWeight:700}}>🏁 กำลังแข่ง!</div>
+          <div style={{textAlign:"center",marginBottom:8,minHeight:22}}>
+            {finalStretch
+              ? <span style={{fontSize:13,fontWeight:700,color:"#fbbf24",animation:"glow-pulse .45s ease infinite"}}>🔥 FINAL STRETCH! 🔥</span>
+              : <span style={{fontSize:11,color:"#4ade80",fontWeight:700}}>🏁 กำลังแข่ง!</span>
+            }
           </div>
           <Track/>
-          {playerBet&&<div style={{textAlign:"center",fontSize:10,color:HORSE_COLORS[playerBet.horse],fontWeight:700}}>
-            {HORSE_EMOJIS[playerBet.horse]} {HORSE_NAMES[playerBet.horse]} — ฿{playerBet.amount.toLocaleString()} · ลุ้นรับ ฿{Math.round(playerBet.amount*2.4).toLocaleString()}
+          {playerBet&&<div style={{textAlign:"center",fontSize:10,color:HORSE_COLORS[playerBet.horse],fontWeight:700,marginTop:4}}>
+            {HORSE_EMOJIS[playerBet.horse]} {HORSE_NAMES[playerBet.horse]} — ฿{playerBet.amount.toLocaleString()} → ลุ้น ฿{Math.round(playerBet.amount*2.4).toLocaleString()}
           </div>}
         </div>
       )}
@@ -1752,13 +1794,18 @@ function HorseRaceWatchModal({ cash, onBet, onWin, onLose, onClose }) {
       {phase==='result' && winner>=0 && (
         <div>
           <Track/>
-          <div style={{textAlign:"center",padding:"14px",borderRadius:12,
-            background:won?"linear-gradient(135deg,#14532d20,#16653420)":"linear-gradient(135deg,#7f1d1d20,#991b1b20)",
-            border:`1px solid ${won?"#4ade8035":"#f8717135"}`,
-            fontSize:14,fontWeight:700,color:won?"#4ade80":"#f87171",animation:"notif-in .4s ease"}}>
-            {won
-              ?`🏆 ${HORSE_EMOJIS[winner]} ${HORSE_NAMES[winner]} ชนะ! +฿${(Math.round(playerBet.amount*2.4)-playerBet.amount).toLocaleString()}`
-              :`💔 ${HORSE_EMOJIS[winner]} ${HORSE_NAMES[winner]} ชนะ${playerBet?` — เสีย ฿${playerBet.amount.toLocaleString()}`:"!"}`}
+          <div style={{textAlign:"center",padding:"18px 14px",borderRadius:14,
+            background:won?"linear-gradient(135deg,#14532d28,#16653428)":"linear-gradient(135deg,#7f1d1d28,#991b1b28)",
+            border:`1px solid ${won?"#4ade8050":"#f8717150"}`,animation:"modal-slide-up .35s ease"}}>
+            <div style={{fontSize:36,marginBottom:6,animation:won?"rarity-pop .5s ease":"none"}}>{won?"🏆":"💔"}</div>
+            <div style={{fontSize:13,fontWeight:700,color:won?"#4ade80":"#f87171",marginBottom:4}}>
+              {HORSE_EMOJIS[winner]} {HORSE_NAMES[winner]} {won?"ชนะ!":"ชนะ"}
+            </div>
+            <div style={{fontSize:won?22:15,fontWeight:700,color:won?"#fbbf24":"#f87171"}}>
+              {won
+                ? `+฿${(Math.round(playerBet.amount*2.4)-playerBet.amount).toLocaleString()}`
+                : `-฿${playerBet?.amount.toLocaleString()}`}
+            </div>
           </div>
           <button onClick={resetRace} style={{
             width:"100%",marginTop:10,padding:"11px",borderRadius:10,border:"1px solid #fbbf2440",
@@ -3999,18 +4046,6 @@ const myRank = allP.findIndex(p=>p.isMe)+1;
         </div>
       )}
 
-      {/* ── RACE BANNER ── */}
-      <div onClick={()=>setModal('horserace')} style={{margin:"5px 14px 0",padding:"10px 14px",borderRadius:11,
-        background:"linear-gradient(135deg,#78350f12,#fbbf2408)",border:"1px solid #fbbf2430",cursor:"pointer"}}>
-        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-          <div>
-            <div style={{fontSize:8,letterSpacing:3,color:"#fbbf2466",marginBottom:1}}>🏇 HORSE RACE</div>
-            <div style={{color:"#fbbf24",fontWeight:700,fontSize:12}}>แข่งม้าเดิมพัน — กดแข่งเลย!</div>
-          </div>
-          <div style={{fontSize:9,color:"#fbbf2466"}}>ชนะ ×2.4 →</div>
-        </div>
-      </div>
-
       {notif && (
         <div key={notif.id} style={{
           position:"fixed",top:72,left:"50%",transform:"translateX(-50%)",
@@ -5008,6 +5043,7 @@ ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
 @keyframes float-up { from { opacity:1; transform:translateY(0) scale(1); } to { opacity:0; transform:translateY(-28px) scale(0.8); } }
 @keyframes cash-pop { 0%{ transform:scale(1); } 30%{ transform:scale(1.2); } 100%{ transform:scale(1); } }
 @keyframes race-track-scroll { from { background-position: 0 0; } to { background-position: -60px 0; } }
+@keyframes horseGallop { 0%,100%{transform:translateY(0) rotate(-4deg)} 50%{transform:translateY(-5px) rotate(4deg)} }
 @keyframes star-float { 0%,100%{ transform:translateY(0) rotate(0deg); opacity:0.4; } 50%{ transform:translateY(-8px) rotate(8deg); opacity:0.8; } }
 @keyframes lobby-bg { 0%,100%{ background-position:0% 50%; } 50%{ background-position:100% 50%; } }
 
