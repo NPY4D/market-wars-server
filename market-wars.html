@@ -23,6 +23,7 @@
 </head>
 <body>
 <div id="root"></div>
+<div id="ver" style="position:fixed;bottom:6px;left:8px;z-index:9999;font-size:8px;color:#ffffff55;font-family:'IBM Plex Mono',monospace;letter-spacing:1px;pointer-events:none;user-select:none;text-shadow:0 1px 4px #000000aa">v2.2 · 26/05/69 23:30</div>
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useCallback } = React;
 
@@ -4175,13 +4176,6 @@ const myRank = allP.findIndex(p=>p.isMe)+1;
 
   return (
     <div style={{minHeight:"100vh",background:G.bg,fontFamily:G.font,paddingBottom:72}}>
-
-      {/* VERSION BADGE */}
-      <div style={{position:"fixed",bottom:6,left:8,zIndex:9999,
-        fontSize:8,color:"#ffffff55",fontFamily:G.font,letterSpacing:1,
-        pointerEvents:"none",userSelect:"none",
-        textShadow:"0 1px 4px #000000aa",
-      }}>{BUILD}</div>
 
       {/* ONLINE STATUS BAR */}
       {ONLINE_MODE && (
