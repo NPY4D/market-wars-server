@@ -3109,7 +3109,7 @@ function GameScreen({ session, initPlayers, client, onEnd }) {
   const histR      = useRef(Object.fromEntries(gameAssets.map(a=>[a.id,[a.bp]])));
   const evR        = useRef(null);
   const evTimerR   = useRef(0);
-  const nextEvR    = useRef(18);
+  const nextEvR    = useRef(30);
   const botsR      = useRef(initPlayers.filter(p=>!p.isMe).map(p=>({
     ...p, cash:initCash, hold:{}, nw:initCash,
   })));
@@ -3294,6 +3294,12 @@ function GameScreen({ session, initPlayers, client, onEnd }) {
         case "EVENT":
           setActiveEv({...msg.event, _ts:Date.now()});
           _snd.play('event');
+          if (msg.event?.hypeEff) {
+            Object.entries(msg.event.hypeEff).forEach(([t, mult]) => {
+              hypeIdxR.current[t] = Math.min(6.0, Math.max(0.15, hypeIdxR.current[t] * mult));
+            });
+            setHypeIdx({...hypeIdxR.current});
+          }
           break;
         case "MINI_EVENT":
           if(msg.assetId&&priceR.current[msg.assetId]){
