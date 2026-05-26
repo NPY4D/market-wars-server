@@ -2876,6 +2876,15 @@ function GameScreen({ session, initPlayers, client, onEnd }) {
     }
   }, []);
 
+  const syncCash  = useCallback(() => setCash(cashR.current), []);
+  const syncBank  = useCallback(() => setBank(bankR.current), []);
+  const applyServerCash = useCallback((total) => {
+    const delta = total - (cashR.current + bankR.current);
+    bankR.current = Math.max(0, bankR.current + delta);
+    cashR.current = Math.max(0, total - bankR.current);
+    syncCash(); syncBank();
+  }, [syncCash, syncBank]);
+
   // ── ONLINE: รับ messages จาก server ──
   useEffect(() => {
     if (!client || !client.ok) { onlineRef.current=false; return; }
@@ -3191,15 +3200,6 @@ function GameScreen({ session, initPlayers, client, onEnd }) {
     return () => window.removeEventListener("keydown", handler);
   }, [modal, selAsset]);
 
-  const syncCash  = useCallback(() => setCash(cashR.current), []);
-  const syncBank  = useCallback(() => setBank(bankR.current), []);
-  // ออนไลน์: server ส่ง total cash (= cashR+bankR) — กระจายด้วย bank คงที่ก่อน
-  const applyServerCash = useCallback((total) => {
-    const delta = total - (cashR.current + bankR.current);
-    bankR.current = Math.max(0, bankR.current + delta);
-    cashR.current = Math.max(0, total - bankR.current);
-    syncCash(); syncBank();
-  }, [syncCash, syncBank]);
   const syncHold  = () => setHold({...holdR.current});
 
   const BANK_FEE = 0.015;
