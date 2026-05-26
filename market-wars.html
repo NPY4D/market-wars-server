@@ -1662,7 +1662,10 @@ function HorseRaceWatchModal({ raceR, pickedHorse, onPickHorse, onBet, cash, onC
           </div>
           <div style={{display:"flex",flexDirection:"column",gap:7,marginBottom:12}}>
             {HORSE_NAMES.map((name,i)=>{
-              const isPick=pickedHorse===i, isBet=pb?.horse===i, npc=race.npcBets?.[i]||[];
+              const isPick=pickedHorse===i, isBet=pb?.horse===i;
+              const npc=(race.npcBets?.[i]||[]).map(b=>b.nick);
+              const online=(race.onlineBets||[]).filter(b=>b.horse===i).map(b=>b.nick);
+              const allBettors=[...online,...npc];
               return (
                 <button key={i} onClick={()=>!isBet&&onPickHorse(isPick?-1:i)} style={{
                   padding:"10px 14px",borderRadius:11,cursor:isBet?"default":"pointer",fontFamily:G.font,
@@ -1677,7 +1680,11 @@ function HorseRaceWatchModal({ raceR, pickedHorse, onPickHorse, onBet, cash, onC
                       {isBet&&<div style={{fontSize:9,color:"#4ade8088"}}>✓ เดิมพัน ฿{pb.amount.toLocaleString()}</div>}
                     </div>
                   </div>
-                  {npc.length>0&&<div style={{fontSize:8,color:"#ffffff33",textAlign:"right"}}>{npc.map(b=>b.nick).join(' · ')}</div>}
+                  <div style={{textAlign:"right"}}>
+                    {online.length>0&&<div style={{fontSize:8,color:HORSE_COLORS[i],fontWeight:700}}>{online.join(' · ')}</div>}
+                    {npc.length>0&&<div style={{fontSize:8,color:"#ffffff28"}}>{npc.join(' · ')}</div>}
+                    {allBettors.length>0&&<div style={{fontSize:7,color:"#ffffff18"}}>{allBettors.length} คนเดิมพัน</div>}
+                  </div>
                 </button>
               );
             })}
@@ -2741,6 +2748,121 @@ function GameScreen({ session, initPlayers, client, onEnd }) {
           if(msg.eventTimer!==undefined) setEvTimer(msg.eventTimer);
           if(msg.hypeIdx) { hypeIdxR.current={...msg.hypeIdx}; setHypeIdx({...msg.hypeIdx}); }
           if(msg.board) setBoard(msg.board);
+          // ── RACE (server-driven, silent state sync) ──
+          if(msg.race) {
+            const sr=msg.race, cr=raceR.current, prevP=cr.phase;
+            cr.breakTick=sr.breakTick; cr.betTick=sr.betTick; cr.racingTick=sr.racingTick;
+            cr.winner=sr.winner; cr.npcBets=sr.npcBets; cr.onlineBets=sr.playerBets||[];
+            if(sr.phase!==prevP) {
+              cr.phase=sr.phase;
+              if(sr.phase==='betting') {
+                cr.playerBet=null; cr.positions=[0,0,0,0,0]; cr.velocities=HORSE_NAMES.map(()=>1.5+Math.random()*1.5);
+                cr.won=false; setRace({...cr}); setRacePickedHorse(-1);
+                // RACE_START fires the notification — no dupe here
+              } else if(sr.phase==='racing') {
+                cr.positions=[0,0,0,0,0]; cr.velocities=HORSE_NAMES.map(()=>1.5+Math.random()*1.5);
+                setRace({...cr});
+                if(racingSubIdR.current) clearInterval(racingSubIdR.current);
+                const sW=sr.winner;
+                racingSubIdR.current=setInterval(()=>{
+                  const rs2=raceR.current;
+                  if(rs2.phase!=='racing'){clearInterval(racingSubIdR.current);racingSubIdR.current=null;return;}
+                  rs2.velocities=rs2.velocities.map(v=>Math.max(0.5,Math.min(4,v+(Math.random()-0.5)*1.5)));
+                  rs2.positions=rs2.positions.map((p,i)=>Math.min(100,p+rs2.velocities[i]+(i===sW&&p>60?0.5:0)));
+                  if(Math.max(...rs2.positions)>=95) rs2.positions[sW]=100;
+                  const fi=rs2.positions.findIndex(p=>p>=100);
+                  if(fi>=0){rs2.winner=fi;rs2.phase='result';rs2.won=rs2.playerBet?.horse===fi;setRace({...rs2});clearInterval(racingSubIdR.current);racingSubIdR.current=null;}
+                  else setRace({...rs2});
+                },250);
+              } else if(sr.phase==='result') {
+                if(racingSubIdR.current){clearInterval(racingSubIdR.current);racingSubIdR.current=null;}
+                if(prevP==='racing') cr.positions=cr.positions.map((p,i)=>i===sr.winner?100:Math.min(99,p));
+                setRace({...cr});
+              } else { // break
+                if(racingSubIdR.current){clearInterval(racingSubIdR.current);racingSubIdR.current=null;}
+                setRace({...cr});
+              }
+            } else if(sr.phase!=='racing') { setRace({...cr}); } // countdown tick update
+          }
+          // ── AUCTION (server-driven, silent state sync) ──
+          if(msg.auction) {
+            const sa=msg.auction, ca=auctionR.current, prevA=ca.phase;
+            if(sa.phase==='idle') {
+              if(prevA!=='idle'){ auctionR.current={phase:'idle',countdown:25,asset:null,currentBid:0,currentBidder:null,window:0,ownerNick:null,ownerExpiry:0}; setAuction(null); }
+            } else if(sa.phase==='bidding') {
+              const aAsset=ASSETS.find(a=>a.id===sa.assetId)||gameAssets.find(a=>a.id===sa.assetId);
+              if(prevA!=='bidding') {
+                auctionR.current={phase:'bidding',asset:aAsset||{id:sa.assetId,name:sa.assetId,emoji:'🏷️',bp:0},
+                  currentBid:sa.currentBid,currentBidder:sa.currentBidderNick===session.nick?'player':(sa.currentBidderNick||null),
+                  window:sa.window,ownerNick:null,ownerExpiry:0};
+                setAuction({...auctionR.current}); setBidInput(sa.currentBid+200);
+                // AUCTION_START fires the notification
+              } else {
+                ca.window=sa.window; ca.currentBid=sa.currentBid;
+                ca.currentBidder=sa.currentBidderNick===session.nick?'player':(sa.currentBidderNick||null);
+                setAuction({...ca});
+              }
+            } else if(sa.phase==='owned') {
+              if(prevA!=='owned') {
+                const aAsset2=ASSETS.find(a=>a.id===sa.assetId)||ca.asset;
+                auctionR.current={phase:'owned',asset:aAsset2||ca.asset,currentBid:sa.currentBid,currentBidder:sa.currentBidderNick,
+                  window:0,ownerNick:sa.ownerNick,ownerExpiry:sa.ownerExpiry};
+                setAuction({...auctionR.current}); // AUCTION_END fires notification
+              } else { ca.ownerExpiry=sa.ownerExpiry; setAuction({...ca}); }
+            }
+          }
+          break;
+        case "RACE_START":
+          { const cr2=raceR.current;
+            cr2.playerBet=null; cr2.positions=[0,0,0,0,0]; cr2.velocities=HORSE_NAMES.map(()=>1.5+Math.random()*1.5);
+            cr2.betTick=msg.betTick||25; cr2.won=false; cr2.winner=-1; cr2.phase='betting';
+            setRace({...cr2}); setRacePickedHorse(-1);
+            showNotif("🏇 เปิดรับเดิมพัน! แข่งม้า — 25 วิ!", "#fbbf24"); _snd.play('event');
+          }
+          break;
+        case "RACE_RESULT":
+          { const pb2=raceR.current.playerBet;
+            if(pb2) {
+              if(pb2.horse===msg.winner){ _snd.play('jackpot'); setConfetti(true); setTimeout(()=>setConfetti(false),3000); showNotif(`🏆 ${msg.winnerEmoji} ${msg.winnerName} ชนะ!`,"#fbbf24"); }
+              else { _snd.play('bust'); showNotif(`💔 ${msg.winnerEmoji} ${msg.winnerName} ชนะ — เสีย ${fmt(pb2.amount)}`,"#f87171"); }
+            } else { showNotif(`🏁 ${msg.winnerEmoji} ${msg.winnerName} ชนะ!`,"#94a3b8"); }
+          }
+          break;
+        case "RACE_BET_UPDATE":
+          raceR.current.onlineBets=msg.playerBets||[]; setRace({...raceR.current});
+          break;
+        case "RACE_BET_RESULT":
+          if(msg.ok){ cashR.current=msg.cash; syncCash(); raceR.current.playerBet={horse:msg.horse,amount:msg.amount}; setRace({...raceR.current}); setRacePickedHorse(msg.horse); showNotif(`🐎 เดิมพัน ${HORSE_EMOJIS[msg.horse]} ${HORSE_NAMES[msg.horse]} ฿${msg.amount.toLocaleString()}`,HORSE_COLORS[msg.horse]); }
+          else showNotif(`❌ ${msg.msg}`,"#f87171");
+          break;
+        case "AUCTION_START":
+          { const aAsset3=ASSETS.find(a=>a.id===msg.assetId)||gameAssets.find(a=>a.id===msg.assetId)||{id:msg.assetId,name:msg.assetName,emoji:msg.assetEmoji,bp:0};
+            auctionR.current={phase:'bidding',asset:aAsset3,currentBid:msg.currentBid,currentBidder:null,window:msg.window,ownerNick:null,ownerExpiry:0};
+            setAuction({...auctionR.current}); setBidInput(msg.currentBid+200);
+            showNotif(`🔨 AUCTION! สิทธิ์ผูกขาด ${msg.assetEmoji}${msg.assetName} — ประมูล ${msg.window} วิ!`,"#c084fc"); _snd.play('event');
+          }
+          break;
+        case "AUCTION_BID_UPDATE":
+          if(auctionR.current?.phase==='bidding'){
+            const wasLead=auctionR.current.currentBidder==='player';
+            auctionR.current.currentBid=msg.currentBid;
+            auctionR.current.currentBidder=msg.currentBidderNick===session.nick?'player':msg.currentBidderNick;
+            if(wasLead&&auctionR.current.currentBidder!=='player') showNotif(`😤 ${msg.currentBidderNick} เสนอสูงกว่า — ฿${msg.currentBid.toLocaleString()}!`,"#f87171");
+            setAuction({...auctionR.current});
+          }
+          break;
+        case "AUCTION_BID_RESULT":
+          if(msg.ok){ cashR.current=msg.cash; syncCash(); if(auctionR.current){auctionR.current.currentBidder='player'; setBidInput((auctionR.current.currentBid||0)+200); setAuction({...auctionR.current});} showNotif(`🔨 Bid ฿${auctionR.current?.currentBid?.toLocaleString()} — คุณนำอยู่!`,"#c084fc"); }
+          else showNotif(`❌ ${msg.msg}`,"#f87171");
+          break;
+        case "AUCTION_END":
+          if(!msg.winner){ auctionR.current.phase='idle'; setAuction(null); }
+          else if(msg.winner===session.nick){ if(auctionR.current){auctionR.current.phase='owned';auctionR.current.ownerNick=msg.winner;auctionR.current.ownerExpiry=60;setAuction({...auctionR.current});} showNotif(`👑 คุณชนะ! ผูกขาด ${auctionR.current?.asset?.emoji||''}${auctionR.current?.asset?.name||''} เก็บค่าผ่านทาง!`,"#c084fc"); _snd.play('jackpot'); }
+          else { if(auctionR.current){auctionR.current.phase='owned';auctionR.current.ownerNick=msg.winner;auctionR.current.ownerExpiry=60;setAuction({...auctionR.current});} showNotif(`${msg.winner} ชนะประมูล ${auctionR.current?.asset?.emoji||''}`,"#ffffff44"); }
+          break;
+        case "AUCTION_EXPIRED":
+          showNotif(`${msg.assetEmoji} สิทธิ์ผูกขาดหมดอายุ`,"#ffffff44");
+          auctionR.current.phase='idle'; setAuction(null);
           break;
         case "TRADE_RESULT":
           if(msg.ok){
@@ -3555,148 +3677,6 @@ function GameScreen({ session, initPlayers, client, onEnd }) {
     return () => { clearInterval(id); if (racingSubIdR.current) { clearInterval(racingSubIdR.current); racingSubIdR.current = null; } };
   }, [showNotif, syncCash, session, gameAssets]);
 
-  // ── ONLINE: RACE & AUCTION SYNC (all players in same room see same events) ──
-  useEffect(() => {
-    if (!onlineRef.current) return;
-    const dur = session.duration || cfg.dur;
-    const elapsed = dur - timeLeft;
-    const RACE_CYCLE = 70; // 15s break + 25s betting + 25s racing + 5s result
-    const AUC_CYCLE  = 80; // 20s idle + 20s bidding + 40s owned
-    const AUC_OFFSET = 35; // stagger so auction doesn't start same time as race
-
-    const codeH   = (session.code || '').split('').reduce((h, c) => (h * 31 + c.charCodeAt(0)) | 0, 0);
-    const seededR = (n) => { const x = Math.sin(n * 127.1 + 311.7) * 43758.5453; return x - Math.floor(x); };
-
-    // ── HORSE RACE ──
-    const raceEpoch = Math.floor(elapsed / RACE_CYCLE);
-    const rt        = elapsed % RACE_CYCLE;
-    const rs        = raceR.current;
-
-    if (rt < 15) {
-      // break
-      const breakLeft = 15 - rt;
-      if (rs.phase !== 'break') { rs.phase = 'break'; rs.breakTick = breakLeft; setRace({...rs}); }
-      else { rs.breakTick = breakLeft; setRace({...rs}); }
-    } else if (rt < 40) {
-      // betting open
-      const betTick = 40 - rt;
-      if (rs.phase !== 'betting') {
-        rs.phase = 'betting'; rs.betTick = betTick;
-        rs.positions = [0,0,0,0,0];
-        rs.velocities = HORSE_NAMES.map(() => 1.5 + Math.random() * 1.5);
-        rs.winner = -1; rs.npcBets = [[],[],[],[],[]]; rs.won = false;
-        setRace({...rs}); setRacePickedHorse(-1);
-        showNotif("🏇 เปิดรับเดิมพัน! แข่งม้า — 25 วิ!", "#fbbf24");
-        _snd.play('event');
-      } else { rs.betTick = betTick; setRace({...rs}); }
-    } else if (rt < 65) {
-      // racing — start sub-interval animation once per epoch
-      if (rs.phase === 'betting' || (rs.phase === 'break' && elapsed > 0)) {
-        rs.phase = 'racing'; setRace({...rs});
-        showNotif("🏁 ม้าออกสตาร์ท!", "#fbbf24"); _snd.play('beepHi');
-        const winner = Math.floor(seededR(raceEpoch * 997 + Math.abs(codeH)) * 5);
-        if (racingSubIdR.current) clearInterval(racingSubIdR.current);
-        racingSubIdR.current = setInterval(() => {
-          const rs2 = raceR.current;
-          if (rs2.phase !== 'racing') { clearInterval(racingSubIdR.current); racingSubIdR.current = null; return; }
-          rs2.velocities = rs2.velocities.map(v => Math.max(0.5, Math.min(4, v + (Math.random()-0.5)*1.5)));
-          rs2.positions  = rs2.positions.map((p, i) => Math.min(100, p + rs2.velocities[i] + (i === winner && p > 60 ? 0.5 : 0)));
-          if (Math.max(...rs2.positions) >= 95) rs2.positions[winner] = 100;
-          const finIdx = rs2.positions.findIndex(p => p >= 100);
-          if (finIdx >= 0) {
-            rs2.winner = finIdx; rs2.phase = 'result';
-            rs2.won = rs2.playerBet?.horse === finIdx;
-            if (rs2.playerBet) {
-              if (rs2.won) {
-                const pay = Math.round(rs2.playerBet.amount * 2.4); cashR.current += pay; syncCash();
-                showNotif(`🏆 ${HORSE_EMOJIS[finIdx]} ${HORSE_NAMES[finIdx]} ชนะ! +${fmt(pay)} (×2.4)`, "#fbbf24");
-                _snd.play('jackpot'); setConfetti(true); setTimeout(() => setConfetti(false), 3000);
-              } else {
-                showNotif(`💔 ${HORSE_EMOJIS[finIdx]} ${HORSE_NAMES[finIdx]} ชนะ — เสีย ${fmt(rs2.playerBet.amount)}`, "#f87171");
-                _snd.play('bust');
-              }
-            } else { showNotif(`🏁 ${HORSE_EMOJIS[finIdx]} ${HORSE_NAMES[finIdx]} ชนะ!`, "#94a3b8"); }
-            setRace({...rs2});
-            clearInterval(racingSubIdR.current); racingSubIdR.current = null;
-          } else { setRace({...rs2}); }
-        }, 250);
-      }
-      // if already 'racing', let sub-interval drive it
-    } else {
-      // result window (rt 65-69) — force finish if animation still running
-      if (rs.phase === 'racing') {
-        const winner = Math.floor(seededR(raceEpoch * 997 + Math.abs(codeH)) * 5);
-        if (racingSubIdR.current) { clearInterval(racingSubIdR.current); racingSubIdR.current = null; }
-        rs.positions = rs.positions.map((p, i) => i === winner ? 100 : Math.min(99, p));
-        rs.winner = winner; rs.phase = 'result';
-        rs.won = rs.playerBet?.horse === winner;
-        if (rs.playerBet) {
-          if (rs.won) {
-            const pay = Math.round(rs.playerBet.amount * 2.4); cashR.current += pay; syncCash();
-            showNotif(`🏆 ${HORSE_EMOJIS[winner]} ${HORSE_NAMES[winner]} ชนะ! +${fmt(pay)} (×2.4)`, "#fbbf24");
-            _snd.play('jackpot'); setConfetti(true); setTimeout(() => setConfetti(false), 3000);
-          } else {
-            showNotif(`💔 ${HORSE_EMOJIS[winner]} ${HORSE_NAMES[winner]} ชนะ — เสีย ${fmt(rs.playerBet.amount)}`, "#f87171");
-            _snd.play('bust');
-          }
-        } else { showNotif(`🏁 ${HORSE_EMOJIS[winner]} ${HORSE_NAMES[winner]} ชนะ!`, "#94a3b8"); }
-        setRace({...rs});
-      }
-    }
-
-    // ── AUCTION (online: no NPC bots; quiet disappear if nobody bids) ──
-    const aucEpoch = Math.floor((elapsed + AUC_OFFSET) / AUC_CYCLE);
-    const at       = (elapsed + AUC_OFFSET) % AUC_CYCLE;
-    const as       = auctionR.current;
-
-    if (at < 20) {
-      // idle
-      if (as.phase !== 'idle') { as.phase = 'idle'; setAuction(null); }
-    } else if (at < 40) {
-      // bidding window
-      const aucWindow = 40 - at;
-      if (as.phase !== 'bidding') {
-        const assetIdx = Math.floor(seededR(aucEpoch * 1337 + Math.abs(codeH)) * gameAssets.length);
-        const a = gameAssets[assetIdx];
-        as.asset = a; as.phase = 'bidding'; as.window = aucWindow;
-        as.currentBid = Math.round((priceR.current[a.id] || a.bp) * 0.15) || 300;
-        as.currentBidder = null;
-        setAuction({...as}); setBidInput(as.currentBid + 200);
-        showNotif(`🔨 AUCTION! สิทธิ์ผูกขาด ${a.emoji}${a.name} — ประมูล 20 วิ!`, "#c084fc");
-        _snd.play('event');
-      } else { as.window = aucWindow; setAuction({...as}); }
-    } else {
-      // resolve or owned (at >= 40)
-      if (as.phase === 'bidding') {
-        if (!as.currentBidder) {
-          // no bids at all — disappear quietly
-          as.phase = 'idle'; setAuction(null);
-        } else if (as.currentBidder === 'player') {
-          as.phase = 'owned'; as.ownerNick = session.nick; as.ownerExpiry = AUC_CYCLE - at;
-          showNotif(`👑 คุณชนะ! ผูกขาด ${as.asset.emoji}${as.asset.name} เก็บค่าผ่านทาง!`, "#c084fc");
-          _snd.play('jackpot'); setAuction({...as});
-        } else {
-          as.phase = 'owned'; as.ownerNick = as.currentBidder; as.ownerExpiry = AUC_CYCLE - at;
-          showNotif(`${as.currentBidder} ชนะประมูล ${as.asset.emoji}${as.asset.name}`, "#ffffff44");
-          setAuction({...as});
-        }
-      } else if (as.phase === 'owned') {
-        as.ownerExpiry = AUC_CYCLE - at;
-        if (as.ownerExpiry <= 0) {
-          showNotif(`${as.asset?.emoji} สิทธิ์ผูกขาดหมดอายุ`, "#ffffff44");
-          as.phase = 'idle'; setAuction(null);
-        } else {
-          if (as.ownerNick === session.nick && at % 5 === 0) {
-            const toll = Math.max(10, Math.round((priceR.current[as.asset.id] || as.asset.bp) * 0.018));
-            cashR.current += toll; syncCash();
-            if (at % 15 === 0) showNotif(`👑 ค่าผ่านทาง ${as.asset.emoji} +${fmt(toll)}`, "#c084fc");
-          }
-          setAuction({...as});
-        }
-      }
-    }
-  }, [timeLeft, showNotif, syncCash, session, gameAssets]);
-
   const doBuy = (q) => {
     const p = priceR.current[selAsset.id]||selAsset.bp;
     const cost = p * q;
@@ -3806,6 +3786,10 @@ function GameScreen({ session, initPlayers, client, onEnd }) {
   const doRaceBet = (horseIdx, amount) => {
     const rs = raceR.current;
     if (rs.phase !== 'betting') { showNotif("⛔ ปิดรับแล้ว","#f87171"); return; }
+    if (onlineRef.current && client?.ok) {
+      client.send("RACE_BET", { horse: horseIdx, amount });
+      return; // server validates, deducts cash, and sends RACE_BET_RESULT
+    }
     if (cashR.current < amount) { showNotif("❌ เงินไม่พอ","#f87171"); return; }
     if (rs.playerBet) cashR.current += rs.playerBet.amount; // refund previous
     cashR.current -= amount; syncCash();
@@ -3819,6 +3803,10 @@ function GameScreen({ session, initPlayers, client, onEnd }) {
     const aState = auctionR.current;
     if (!aState || aState.phase !== 'bidding') return;
     if (amount <= aState.currentBid) { showNotif(`❌ ต้อง Bid มากกว่า ฿${aState.currentBid.toLocaleString()}`,"#f87171"); return; }
+    if (onlineRef.current && client?.ok) {
+      client.send("AUCTION_BID", { amount });
+      return; // server validates, refunds previous bidder, sends AUCTION_BID_RESULT + AUCTION_BID_UPDATE
+    }
     if (cashR.current < amount) { showNotif("❌ เงินไม่พอ","#f87171"); return; }
     if (aState.currentBidder === "player") cashR.current += aState.currentBid; // refund my prev bid
     cashR.current -= amount; syncCash();
