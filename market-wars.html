@@ -23,7 +23,7 @@
 </head>
 <body>
 <div id="root"></div>
-<div id="ver" style="position:fixed;bottom:6px;left:8px;z-index:9999;font-size:8px;color:#ffffff55;font-family:'IBM Plex Mono',monospace;letter-spacing:1px;pointer-events:none;user-select:none;text-shadow:0 1px 4px #000000aa">v2.3 · 27/05/69 00:00</div>
+<div id="ver" style="position:fixed;bottom:6px;left:8px;z-index:9999;font-size:8px;color:#ffffff55;font-family:'IBM Plex Mono',monospace;letter-spacing:1px;pointer-events:none;user-select:none;text-shadow:0 1px 4px #000000aa">v2.5</div>
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useCallback } = React;
 
@@ -75,7 +75,7 @@ const G = {
   text:"#e2e8f0", sub:"#64748b", font:"'IBM Plex Mono','Courier New',monospace",
 };
 
-const BUILD = "v2.3 · 27/05/69 00:00";
+const BUILD = "v2.5";
 
 const ASSETS = [
   // หุ้น
@@ -211,9 +211,9 @@ function genHypeItem(type){
 }
 const CAREERS = [
   { id:'vendor',   name:'🍜 แม่ค้า',      cost:3000,  color:'#fb923c', desc:'รับออเดอร์ทำอาหาร' },
-  { id:'rider',    name:'🚚 ไรเดอร์',      cost:12000, color:'#60a5fa', desc:'ส่งของเลือกเส้นทาง' },
-  { id:'mechanic', name:'🔧 ช่างซ่อม',     cost:40000, color:'#a78bfa', desc:'ซ่อมอุปกรณ์ก่อนหมดเวลา' },
-  { id:'casino',   name:'🎰 เจ้าของบ่อน',  cost:70000, color:'#f59e0b', desc:'ตั้ง Odds รับเงิน NPC' },
+  { id:'rider',    name:'🚚 ไรเดอร์',      cost:7000,  color:'#60a5fa', desc:'ส่งของเลือกเส้นทาง' },
+  { id:'mechanic', name:'🔧 ช่างซ่อม',     cost:18000, color:'#a78bfa', desc:'ซ่อมอุปกรณ์ก่อนหมดเวลา' },
+  { id:'casino',   name:'🎰 เจ้าของบ่อน',  cost:35000, color:'#f59e0b', desc:'ตั้ง Odds รับเงิน NPC' },
 ];
 
 const BOT_CHAT_POOL = [
@@ -1614,107 +1614,188 @@ const HORSE_COLORS = ["#fbbf24","#4ade80","#c084fc","#38bdf8","#f87171"];
 
 function VendorMiniGame({ onResult }) {
   const FOODS = ['🍛','🍜','🧋','🍱','🥗','🍣','🍝','🥪'];
-  const [orders] = useState(() => [...FOODS].sort(()=>Math.random()-0.5).slice(0,3));
-  const [choices] = useState(() => {
-    const rest = FOODS.filter(f=>!orders.includes(f)).sort(()=>Math.random()-0.5).slice(0,3);
-    return [...orders,...rest].sort(()=>Math.random()-0.5);
-  });
-  const [tapped, setTapped] = useState(new Set());
-  const [timeLeft, setTimeLeft] = useState(5);
-  const [result, setResult] = useState(null);
-  const tappedRef = useRef(new Set());
-  const doneRef = useRef(false);
+  const [queue]   = useState(() => [...FOODS].sort(()=>Math.random()-0.5).slice(0,5));
+  const [curIdx,  setCurIdx]  = useState(0);
+  const [score,   setScore]   = useState(0);
+  const [timeLeft,setTimeLeft]= useState(10);
+  const [flash,   setFlash]   = useState(null); // 'good'|'bad'|null
+  const [done,    setDone]    = useState(false);
+  const doneRef  = useRef(false);
+  const scoreRef = useRef(0);
+  const idxRef   = useRef(0);
 
-  const finish = useCallback((cnt) => {
+  const finish = useCallback((sc) => {
     if (doneRef.current) return;
     doneRef.current = true;
-    const earn = cnt>=3?450:cnt>=2?200:cnt>=1?60:-80;
-    setResult({cnt, earn});
-    setTimeout(()=>onResult(earn), 1000);
+    setDone(true);
+    const earn = sc>=5?900:sc>=4?700:sc>=3?480:sc>=2?260:sc>=1?100:0;
+    setTimeout(() => onResult(earn), 1000);
   }, [onResult]);
 
-  useEffect(()=>{
-    const iv = setInterval(()=>setTimeLeft(t=>{
-      if(t<=1){ clearInterval(iv); finish(orders.filter(o=>tappedRef.current.has(o)).length); return 0; }
-      return t-1;
-    }),1000);
-    return ()=>clearInterval(iv);
-  },[finish, orders]);
+  useEffect(() => {
+    const iv = setInterval(() => setTimeLeft(t => {
+      if (t <= 1) { clearInterval(iv); finish(scoreRef.current); return 0; }
+      return t - 1;
+    }), 1000);
+    return () => clearInterval(iv);
+  }, [finish]);
 
   const tap = (food) => {
-    if(doneRef.current||tappedRef.current.has(food)) return;
-    tappedRef.current = new Set([...tappedRef.current, food]);
-    setTapped(new Set(tappedRef.current));
-    if(tappedRef.current.size>=3) finish(orders.filter(o=>tappedRef.current.has(o)).length);
+    if (doneRef.current || idxRef.current >= queue.length) return;
+    const correct = food === queue[idxRef.current];
+    if (correct) { scoreRef.current++; setScore(scoreRef.current); setFlash('good'); }
+    else { setFlash('bad'); }
+    setTimeout(() => setFlash(null), 250);
+    idxRef.current++;
+    setCurIdx(idxRef.current);
+    if (idxRef.current >= queue.length) finish(scoreRef.current);
   };
 
+  const cur = queue[curIdx];
+  const sc  = scoreRef.current;
   return (
-    <Modal onClose={()=>finish(orders.filter(o=>tappedRef.current.has(o)).length)} title="🍜 แม่ค้า — รับออเดอร์">
-      <div style={{textAlign:'center',marginBottom:14}}>
-        <div style={{fontSize:9,color:'#ffffff33',marginBottom:8,letterSpacing:2}}>ออเดอร์ที่รอ</div>
-        <div style={{display:'flex',justifyContent:'center',gap:16,fontSize:34,marginBottom:10}}>
-          {orders.map((f,i)=><span key={i} style={{opacity:tapped.has(f)?0.2:1,transition:'opacity .2s',filter:tapped.has(f)?'grayscale(1)':undefined}}>{f}</span>)}
-        </div>
-        {!result
-          ? <div style={{fontSize:14,fontWeight:700,color:timeLeft<=2?'#f87171':'#4ade80'}}>⏱ {timeLeft}</div>
-          : <div style={{fontSize:14,fontWeight:700,color:result.earn>0?'#4ade80':'#f87171',animation:'notif-in .3s ease'}}>
-              {result.cnt}/3 ถูก → {result.earn>0?'+':''}{result.earn.toLocaleString()}฿
+    <Modal onClose={() => finish(scoreRef.current)} title="🍜 แม่ค้า — รับออเดอร์ด่วน!">
+      <div style={{display:'flex',justifyContent:'space-between',marginBottom:12}}>
+        <span style={{fontSize:13,fontWeight:700,color:timeLeft<=3?'#f87171':'#4ade80'}}>⏱ {timeLeft}</span>
+        <span style={{fontSize:11,color:'#ffffff55'}}>{Math.min(curIdx,5)}/5 ออเดอร์</span>
+      </div>
+      <div style={{textAlign:'center',marginBottom:18,minHeight:90}}>
+        {!done && curIdx < queue.length ? (
+          <>
+            <div style={{fontSize:9,color:'#ffffff33',letterSpacing:2,marginBottom:6}}>ออเดอร์ตอนนี้</div>
+            <div style={{
+              fontSize:64,
+              filter:flash==='good'?'brightness(2) drop-shadow(0 0 12px #4ade80)':flash==='bad'?'grayscale(1) opacity(0.4)':'none',
+              transition:'filter .15s',
+            }}>{cur}</div>
+          </>
+        ) : (
+          <div style={{paddingTop:16,animation:'notif-in .3s ease'}}>
+            <div style={{fontSize:36,marginBottom:6}}>{sc>=4?'⭐':sc>=2?'😊':'😢'}</div>
+            <div style={{fontSize:15,fontWeight:700,color:sc>=3?'#4ade80':'#f87171'}}>
+              {sc}/5 ออเดอร์ → {sc>0?`+฿${(sc>=5?900:sc>=4?700:sc>=3?480:sc>=2?260:100).toLocaleString()}`:'฿0'}
             </div>
-        }
+          </div>
+        )}
       </div>
-      <div style={{display:'flex',flexWrap:'wrap',gap:8,justifyContent:'center'}}>
-        {choices.map((f,i)=>(
-          <button key={i} onClick={()=>tap(f)} style={{
-            fontSize:30,padding:'10px 14px',borderRadius:14,cursor:doneRef.current?'default':'pointer',fontFamily:G.font,
-            border:`2px solid ${tapped.has(f)?(orders.includes(f)?'#4ade8080':'#f8717160'):'#ffffff15'}`,
-            background:tapped.has(f)?(orders.includes(f)?'#4ade8018':'#f8717118'):'#ffffff05',transition:'all .1s',
-          }}>{f}</button>
-        ))}
-      </div>
+      {!done && (
+        <div style={{display:'flex',flexWrap:'wrap',gap:8,justifyContent:'center'}}>
+          {FOODS.map((f,i) => (
+            <button key={i} onClick={() => tap(f)} style={{
+              fontSize:30,padding:'9px 12px',borderRadius:14,cursor:'pointer',fontFamily:G.font,
+              border:'2px solid #ffffff15',background:'#ffffff05',transition:'transform .1s',
+            }}>{f}</button>
+          ))}
+        </div>
+      )}
     </Modal>
   );
 }
 
 function RiderMiniGame({ onResult }) {
-  const [picked, setPicked] = useState(null);
-  const [result, setResult] = useState(null);
+  const LIGHTS = 4;
+  const [phase,    setPhase]    = useState('ready'); // ready|playing|done
+  const [lightIdx, setLightIdx] = useState(0);
+  const [lightState,setLightState] = useState('red');
+  const [hits,     setHits]     = useState([]);
+  const [earn,     setEarn]     = useState(0);
+  const doneRef    = useRef(false);
+  const hitsRef    = useRef([]);
+  const idxRef     = useRef(0);
+  const stateRef   = useRef('red');
+  const timerRef   = useRef(null);
 
-  const choose = (route) => {
-    if(picked) return;
-    setPicked(route);
-    let earn, fined=false;
-    if(route==='fast'){ fined=Math.random()<0.30; earn=fined?550:900; }
-    else if(route==='normal'){ earn=650; }
-    else { earn=380; }
-    setResult({route,earn,fined});
-    setTimeout(()=>onResult(earn),1100);
+  const calcEarn = (res) => Math.max(0,
+    res.reduce((s,r) => s + (r==='green'?375:r==='yellow'?188:r==='red'?-120:0), 0)
+  );
+
+  const finish = useCallback(() => {
+    if (doneRef.current) return;
+    doneRef.current = true;
+    clearTimeout(timerRef.current);
+    const e = calcEarn(hitsRef.current);
+    setEarn(e); setPhase('done');
+    setTimeout(() => onResult(e), 1500);
+  }, [onResult]);
+
+  const nextLight = useCallback((idx) => {
+    if (doneRef.current) return;
+    if (idx >= LIGHTS) { finish(); return; }
+    idxRef.current = idx; setLightIdx(idx);
+    stateRef.current = 'red'; setLightState('red');
+    timerRef.current = setTimeout(() => {
+      stateRef.current = 'green'; setLightState('green');
+      timerRef.current = setTimeout(() => {
+        stateRef.current = 'yellow'; setLightState('yellow');
+        timerRef.current = setTimeout(() => {
+          if (idxRef.current === idx) {
+            hitsRef.current = [...hitsRef.current, 'miss'];
+            setHits([...hitsRef.current]);
+            nextLight(idx + 1);
+          }
+        }, 600);
+      }, 1400);
+    }, 1400);
+  }, [finish]);
+
+  const go = () => { setPhase('playing'); nextLight(0); };
+
+  const pass = () => {
+    if (doneRef.current || phase !== 'playing') return;
+    const idx = idxRef.current;
+    const hit = stateRef.current === 'green' ? 'green' : stateRef.current === 'yellow' ? 'yellow' : 'red';
+    clearTimeout(timerRef.current);
+    hitsRef.current = [...hitsRef.current, hit];
+    setHits([...hitsRef.current]);
+    idxRef.current = idx + 1;
+    nextLight(idx + 1);
   };
 
-  const ROUTES = [
-    {id:'fast',   label:'⚡ ทางด่วน',   sub:'฿900 · เสี่ยง 30% โดนปรับ −฿350', color:'#fbbf24'},
-    {id:'normal', label:'🛣️ ทางปกติ',   sub:'฿650 · ปลอดภัย',                   color:'#60a5fa'},
-    {id:'slow',   label:'🌿 ทางเลี่ยง', sub:'฿380 · ปลอดภัย 100%',              color:'#4ade80'},
-  ];
+  const clr = {red:'#f87171',green:'#4ade80',yellow:'#fbbf24'};
+  const ico = {red:'🔴',green:'🟢',yellow:'🟡'};
 
   return (
-    <Modal onClose={()=>!picked&&onResult(0)} title="🚚 ไรเดอร์ — เลือกเส้นทาง">
-      {!result ? (
-        <div style={{display:'flex',flexDirection:'column',gap:10}}>
-          {ROUTES.map(r=>(
-            <button key={r.id} onClick={()=>choose(r.id)} style={{
-              padding:'14px 16px',borderRadius:12,cursor:'pointer',fontFamily:G.font,textAlign:'left',
-              border:`1px solid ${r.color}35`,background:`${r.color}08`,transition:'all .15s',
-            }}>
-              <div style={{fontWeight:700,fontSize:13,color:r.color,marginBottom:2}}>{r.label}</div>
-              <div style={{fontSize:9,color:'#ffffff44'}}>{r.sub}</div>
-            </button>
-          ))}
+    <Modal onClose={() => { if (phase==='ready') onResult(0); }} title="🚚 ไรเดอร์ — จับจังหวะไฟเขียว!">
+      {phase==='ready' && (
+        <div style={{textAlign:'center'}}>
+          <div style={{fontSize:48,marginBottom:12}}>🚦</div>
+          <div style={{fontSize:10,color:'#ffffff44',marginBottom:16,lineHeight:1.9}}>
+            กด <b style={{color:'#4ade80'}}>ผ่าน!</b> ตอนไฟเขียว → +฿375<br/>
+            ไฟเหลือง → +฿188 &nbsp;|&nbsp; ไฟแดง → −฿120
+          </div>
+          <button onClick={go} style={{width:'100%',padding:14,borderRadius:10,border:'none',
+            background:'linear-gradient(135deg,#1e3a5f,#1e40af)',color:'#60a5fa',
+            cursor:'pointer',fontSize:14,fontWeight:900,fontFamily:G.font}}>🚀 เริ่มส่ง!</button>
         </div>
-      ) : (
-        <div style={{textAlign:'center',padding:'24px 0'}}>
-          <div style={{fontSize:36,marginBottom:8}}>{result.fined?'🚔':result.route==='fast'?'⚡':result.route==='normal'?'🛣️':'🌿'}</div>
-          <div style={{fontSize:11,color:'#ffffff55',marginBottom:8}}>{result.fined?'โดนปรับ −฿350!':'ส่งสำเร็จ!'}</div>
-          <div style={{fontSize:20,fontWeight:700,color:'#4ade80',animation:'notif-in .3s ease'}}>+฿{result.earn.toLocaleString()}</div>
+      )}
+      {phase==='playing' && (
+        <div style={{textAlign:'center'}}>
+          <div style={{fontSize:11,color:'#ffffff44',marginBottom:8}}>ด่านที่ {lightIdx+1} / {LIGHTS}</div>
+          <div style={{fontSize:80,marginBottom:8,
+            filter:`drop-shadow(0 0 24px ${clr[lightState]}66)`,transition:'filter .15s'
+          }}>{ico[lightState]}</div>
+          <div style={{display:'flex',gap:8,justifyContent:'center',marginBottom:20}}>
+            {Array.from({length:LIGHTS}).map((_,i)=>(
+              <div key={i} style={{width:32,height:10,borderRadius:5,
+                background:i<hits.length?(hits[i]==='green'?'#4ade80':hits[i]==='yellow'?'#fbbf24':hits[i]==='red'?'#f87171':'#ffffff22'):i===lightIdx?'#ffffff33':'#ffffff0f'
+              }}/>
+            ))}
+          </div>
+          <button onClick={pass} style={{width:'100%',padding:20,borderRadius:12,border:'none',
+            background:lightState==='green'?'linear-gradient(135deg,#14532d,#166534)':lightState==='yellow'?'linear-gradient(135deg,#78350f,#92400e)':'#ffffff08',
+            color:clr[lightState],cursor:'pointer',fontSize:22,fontWeight:900,fontFamily:G.font,
+            boxShadow:lightState==='green'?'0 4px 24px #14532d88':'none',transition:'all .1s',
+          }}>ผ่าน!</button>
+        </div>
+      )}
+      {phase==='done' && (
+        <div style={{textAlign:'center',padding:'10px 0'}}>
+          <div style={{display:'flex',gap:10,justifyContent:'center',marginBottom:16}}>
+            {hits.map((r,i)=><span key={i} style={{fontSize:28}}>{ico[r]||'⬛'}</span>)}
+          </div>
+          <div style={{fontSize:20,fontWeight:700,color:earn>600?'#4ade80':earn>0?'#fbbf24':'#f87171',animation:'notif-in .3s ease'}}>
+            {earn>0?`+฿${earn.toLocaleString()}`:'฿0'}
+          </div>
         </div>
       )}
     </Modal>
@@ -1723,120 +1804,189 @@ function RiderMiniGame({ onResult }) {
 
 function MechanicMiniGame({ onResult }) {
   const TOOLS = ['🔧','⚙️','🔩','🪛','🔌','💡'];
-  const [items, setItems] = useState(()=>TOOLS.map((e,i)=>({id:i,emoji:e,fixed:false})));
-  const [timeLeft, setTimeLeft] = useState(6);
-  const [finished, setFinished] = useState(false);
-  const fixedRef = useRef(0);
+  const [positions] = useState(() => [...TOOLS].sort(()=>Math.random()-0.5));
+  const [order]     = useState(() => [...TOOLS].sort(()=>Math.random()-0.5));
+  const [phase,     setPhase]     = useState('memo'); // memo|repair|done
+  const [memoTime,  setMemoTime]  = useState(3);
+  const [repairTime,setRepairTime]= useState(10);
+  const [nextIdx,   setNextIdx]   = useState(0);
+  const [lives,     setLives]     = useState(2);
+  const [flash,     setFlash]     = useState(null); // {i,good}
+  const [result,    setResult]    = useState(null);
   const doneRef  = useRef(false);
+  const nextRef  = useRef(0);
+  const livesRef = useRef(2);
+  const scoreRef = useRef(0);
 
-  const finish = useCallback((cnt)=>{
-    if(doneRef.current) return;
-    doneRef.current=true;
-    setFinished(true);
-    const earn = cnt>=6?2200:cnt>0?350*cnt:-400;
-    setTimeout(()=>onResult(earn),900);
-  },[onResult]);
+  const finish = useCallback((sc) => {
+    if (doneRef.current) return;
+    doneRef.current = true;
+    const earn = sc>=6?3500:sc>=5?2500:sc>=4?1600:sc>=3?900:sc>=2?400:sc>=1?100:-400;
+    setResult({sc,earn}); setPhase('done');
+    setTimeout(() => onResult(earn), 1200);
+  }, [onResult]);
 
-  useEffect(()=>{
-    const iv=setInterval(()=>setTimeLeft(t=>{
-      if(t<=1){ clearInterval(iv); finish(fixedRef.current); return 0; }
+  useEffect(() => {
+    if (phase!=='memo') return;
+    const iv = setInterval(() => setMemoTime(t => {
+      if (t<=1) { clearInterval(iv); setPhase('repair'); return 0; }
       return t-1;
-    }),1000);
-    return ()=>clearInterval(iv);
-  },[finish]);
+    }), 1000);
+    return () => clearInterval(iv);
+  }, [phase]);
 
-  const fix=(id)=>{
-    if(doneRef.current) return;
-    setItems(prev=>{
-      const next=prev.map(it=>it.id===id&&!it.fixed?{...it,fixed:true}:it);
-      const cnt=next.filter(it=>it.fixed).length;
-      fixedRef.current=cnt;
-      if(cnt>=6) finish(cnt);
-      return next;
-    });
+  useEffect(() => {
+    if (phase!=='repair') return;
+    const iv = setInterval(() => setRepairTime(t => {
+      if (t<=1) { clearInterval(iv); finish(scoreRef.current); return 0; }
+      return t-1;
+    }), 1000);
+    return () => clearInterval(iv);
+  }, [phase, finish]);
+
+  const tap = (tool) => {
+    if (doneRef.current || phase!=='repair') return;
+    const expected = order[nextRef.current];
+    const posI = positions.indexOf(tool);
+    if (tool===expected) {
+      scoreRef.current++;
+      nextRef.current++;
+      setNextIdx(nextRef.current);
+      setFlash({i:posI,good:true});
+      if (nextRef.current>=order.length) finish(scoreRef.current);
+    } else {
+      livesRef.current--;
+      setLives(livesRef.current);
+      setFlash({i:posI,good:false});
+      if (livesRef.current<=0) finish(scoreRef.current);
+    }
+    setTimeout(() => setFlash(null), 320);
   };
 
+  const getNum = (tool) => order.indexOf(tool)+1;
+
   return (
-    <Modal onClose={()=>finish(fixedRef.current)} title="🔧 ช่างซ่อม — ซ่อมทุกชิ้น!">
-      <div style={{textAlign:'center',marginBottom:12}}>
-        <div style={{fontSize:14,fontWeight:700,color:timeLeft<=2?'#f87171':'#4ade80'}}>⏱ {timeLeft} วิ</div>
-        <div style={{fontSize:9,color:'#ffffff33',marginTop:2}}>กดซ่อมให้ครบก่อนหมดเวลา · {fixedRef.current}/6</div>
-      </div>
-      <div style={{display:'flex',flexWrap:'wrap',gap:10,justifyContent:'center',marginBottom:12}}>
-        {items.map(it=>(
-          <button key={it.id} onClick={()=>fix(it.id)} style={{
-            fontSize:30,padding:14,borderRadius:14,fontFamily:G.font,
-            cursor:it.fixed||doneRef.current?'default':'pointer',
-            border:`2px solid ${it.fixed?'#4ade8060':'#f8717150'}`,
-            background:it.fixed?'#4ade8015':'#f8717110',
-            transform:it.fixed?'scale(0.88)':'scale(1)',
-            transition:'all .15s',filter:it.fixed?'grayscale(0.7)':undefined,
-          }}>{it.fixed?'✅':it.emoji}</button>
-        ))}
-      </div>
-      {finished&&<div style={{textAlign:'center',fontSize:12,fontWeight:700,
-        color:fixedRef.current>=4?'#4ade80':'#f87171',animation:'notif-in .3s ease'}}>
-        {fixedRef.current}/6 ชิ้น — {fixedRef.current>=6?'+฿2,200':fixedRef.current>0?`+฿${(350*fixedRef.current).toLocaleString()}`:'-฿400'}
-      </div>}
+    <Modal onClose={() => finish(scoreRef.current)} title="🔧 ช่างซ่อม — จำลำดับแล้วซ่อม!">
+      {phase==='memo' && (
+        <div style={{textAlign:'center'}}>
+          <div style={{fontSize:9,color:'#ffffff44',letterSpacing:2,marginBottom:12}}>จำลำดับซ่อม! ({memoTime} วิ)</div>
+          <div style={{display:'flex',flexWrap:'wrap',gap:10,justifyContent:'center'}}>
+            {positions.map((tool,i) => (
+              <div key={i} style={{position:'relative',width:72,height:72,borderRadius:14,
+                background:'#a78bfa18',border:'1px solid #a78bfa35',
+                display:'flex',alignItems:'center',justifyContent:'center',fontSize:32}}>
+                {tool}
+                <div style={{position:'absolute',top:-9,right:-9,
+                  background:'#a78bfa',borderRadius:'50%',width:24,height:24,
+                  display:'flex',alignItems:'center',justifyContent:'center',
+                  fontSize:12,fontWeight:900,color:'#fff'}}>{getNum(tool)}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+      {phase==='repair' && !result && (
+        <div style={{textAlign:'center'}}>
+          <div style={{display:'flex',justifyContent:'space-between',marginBottom:12}}>
+            <span style={{fontSize:13,fontWeight:700,color:repairTime<=3?'#f87171':'#4ade80'}}>⏱ {repairTime}</span>
+            <span style={{fontSize:13}}>{'❤️'.repeat(livesRef.current)}{'🖤'.repeat(2-livesRef.current)}</span>
+            <span style={{fontSize:11,color:'#ffffff55'}}>{scoreRef.current}/{order.length}</span>
+          </div>
+          <div style={{fontSize:9,color:'#ffffff33',marginBottom:10,letterSpacing:2}}>ต่อไป: ลำดับที่ {nextRef.current+1}</div>
+          <div style={{display:'flex',flexWrap:'wrap',gap:10,justifyContent:'center'}}>
+            {positions.map((tool,i) => (
+              <button key={i} onClick={() => tap(tool)} style={{
+                width:72,height:72,borderRadius:14,cursor:'pointer',fontFamily:G.font,fontSize:32,
+                background:flash?.i===i?(flash.good?'#4ade8030':'#f8717130'):'#ffffff05',
+                border:`2px solid ${flash?.i===i?(flash.good?'#4ade8070':'#f8717170'):'#ffffff15'}`,
+                transition:'all .1s',
+              }}>{tool}</button>
+            ))}
+          </div>
+        </div>
+      )}
+      {phase==='done' && result && (
+        <div style={{textAlign:'center',padding:'20px 0',animation:'notif-in .3s ease'}}>
+          <div style={{fontSize:36,marginBottom:8}}>{result.sc>=5?'⭐':result.sc>=3?'✅':'😢'}</div>
+          <div style={{fontSize:16,fontWeight:700,color:result.earn>0?'#4ade80':'#f87171'}}>
+            ซ่อมได้ {result.sc}/{order.length} → {result.earn>0?`+฿${result.earn.toLocaleString()}`:`฿${result.earn.toLocaleString()}`}
+          </div>
+        </div>
+      )}
     </Modal>
   );
 }
 
 function CasinoMiniGame({ onResult }) {
-  const [oddsX10, setOddsX10] = useState(18); // 1.2–2.5 stored ×10
-  const [phase, setPhase] = useState('set'); // 'set'|'result'
-  const [npcRes, setNpcRes] = useState([]);
-  const [total, setTotal] = useState(0);
-  const NPC_NAMES = ['สมชาย','แดง','นุ่น','เต้','บาส','จุ๋ม','พิม','ไก่'];
+  const NPC_TYPES = [
+    {type:'bear',emoji:'🐻',name:'ขี้ระวัง',pref:'low', desc:'แทงมากถ้า Odds ≤ 1.5'},
+    {type:'bull',emoji:'🦁',name:'นักเสี่ยง',pref:'high',desc:'แทงมากถ้า Odds ≥ 1.8'},
+    {type:'fox', emoji:'🦊',name:'ปกติ',     pref:'any', desc:'แทงตามปกติทุก Odds'},
+  ];
+  const NPC_NAMES = ['สมชาย','แดง','นุ่น','เต้','บาส','จุ๋ม','พิม'];
+  const [npcs]    = useState(() => Array.from({length:7},()=>NPC_TYPES[Math.floor(Math.random()*3)]));
+  const [oddsX10, setOddsX10] = useState(17);
+  const [phase,   setPhase]   = useState('set');
+  const [npcRes,  setNpcRes]  = useState([]);
+  const [total,   setTotal]   = useState(0);
   const odds = oddsX10/10;
-  const npcCount = Math.max(1, Math.round(7-(odds-1.2)*2.6));
-  const winPct   = Math.round(Math.min(88,96/odds));
+
+  const bearN = npcs.filter(n=>n.type==='bear').length;
+  const bullN = npcs.filter(n=>n.type==='bull').length;
+  const hint  = bearN>bullN ? '💡 ส่วนใหญ่ขี้ระวัง → ลอง Odds ต่ำๆ'
+              : bullN>bearN ? '💡 ส่วนใหญ่นักเสี่ยง → ลอง Odds สูงๆ'
+              : '💡 คละประเภท → Odds กลางๆ ~1.6';
 
   const openRound = () => {
-    const winProb = Math.min(0.88, 0.96/odds);
+    const winProb = 0.96/odds;
     const results=[]; let net=0;
-    for(let i=0;i<npcCount;i++){
-      const bet=Math.round((200+Math.random()*600)/100)*100;
+    npcs.forEach((npc,i)=>{
+      const base=Math.round((3000+Math.random()*7000)/500)*500;
+      const mult=npc.pref==='low'?(odds<=1.5?2.0:0.5):npc.pref==='high'?(odds>=1.8?2.0:0.5):1.0;
+      const bet=Math.max(500,Math.round(base*mult/500)*500);
       const wins=Math.random()<winProb;
       const earn=wins?-Math.round(bet*(odds-1)):bet;
       net+=earn;
-      results.push({name:NPC_NAMES[i%NPC_NAMES.length],bet,wins,earn:Math.round(earn)});
-    }
+      results.push({name:NPC_NAMES[i],emoji:npc.emoji,bet,wins,earn:Math.round(earn)});
+    });
     net=Math.round(net);
     setNpcRes(results); setTotal(net); setPhase('result');
     setTimeout(()=>onResult(net),2000);
   };
 
   return (
-    <Modal onClose={()=>phase==='set'&&onResult(0)} title="🎰 บ่อน — ตั้ง Odds">
+    <Modal onClose={()=>phase==='set'&&onResult(0)} title="🎰 บ่อน — อ่าน NPC แล้วตั้ง Odds">
       {phase==='set' ? (
         <div>
+          <div style={{background:'#ffffff06',borderRadius:10,padding:'10px 12px',marginBottom:12,border:'1px solid #ffffff0a'}}>
+            <div style={{fontSize:9,color:'#ffffff33',marginBottom:8,letterSpacing:2}}>ลูกค้าวันนี้</div>
+            <div style={{display:'flex',gap:6,flexWrap:'wrap'}}>
+              {[{type:'bear',count:bearN,emoji:'🐻',color:'#60a5fa',label:'ขี้ระวัง'},
+                {type:'bull',count:bullN,emoji:'🦁',color:'#f87171',label:'นักเสี่ยง'},
+                {type:'fox',count:7-bearN-bullN,emoji:'🦊',color:'#fbbf24',label:'ปกติ'}].map(t=>(
+                <div key={t.type} style={{display:'flex',alignItems:'center',gap:4,
+                  background:`${t.color}12`,border:`1px solid ${t.color}30`,borderRadius:8,padding:'5px 10px'}}>
+                  <span style={{fontSize:16}}>{t.emoji}</span>
+                  <span style={{fontSize:10,color:t.color,fontWeight:700}}>×{t.count} {t.label}</span>
+                </div>
+              ))}
+            </div>
+            <div style={{fontSize:9,color:'#fbbf2488',marginTop:8}}>{hint}</div>
+          </div>
           <div style={{marginBottom:14}}>
             <div style={{display:'flex',justifyContent:'space-between',marginBottom:8}}>
-              <span style={{fontSize:11,color:'#ffffff66'}}>Odds:</span>
+              <span style={{fontSize:11,color:'#ffffff66'}}>Odds ที่ตั้ง:</span>
               <span style={{fontSize:18,fontWeight:700,color:'#fbbf24'}}>{odds.toFixed(1)}×</span>
             </div>
             <input type="range" min={12} max={25} value={oddsX10} onChange={e=>setOddsX10(+e.target.value)}
               style={{width:'100%',accentColor:'#fbbf24'}}/>
             <div style={{display:'flex',justifyContent:'space-between',fontSize:8,color:'#ffffff33',marginTop:4}}>
-              <span>1.2× (NPC เยอะ)</span><span>2.5× (กำไร/หัวมาก)</span>
+              <span>1.2× (ดึง 🐻)</span><span>2.5× (ดึง 🦁)</span>
             </div>
           </div>
-          <div style={{background:'#ffffff05',borderRadius:10,padding:'10px 14px',marginBottom:14,border:'1px solid #ffffff08'}}>
-            <div style={{fontSize:9,color:'#ffffff33',marginBottom:6,letterSpacing:1}}>ประมาณการ</div>
-            <div style={{display:'flex',justifyContent:'space-between',fontSize:11,marginBottom:4}}>
-              <span style={{color:'#ffffff55'}}>NPC เข้าร่วม</span>
-              <span style={{color:'#fbbf24',fontWeight:700}}>{npcCount} คน</span>
-            </div>
-            <div style={{display:'flex',justifyContent:'space-between',fontSize:11}}>
-              <span style={{color:'#ffffff55'}}>โอกาส NPC ชนะ</span>
-              <span style={{color:'#f87171',fontWeight:700}}>{winPct}%</span>
-            </div>
-          </div>
-          <button onClick={openRound} style={{
-            width:'100%',padding:13,borderRadius:10,cursor:'pointer',fontFamily:G.font,
-            border:'1px solid #fbbf2440',background:'#fbbf2412',color:'#fbbf24',fontSize:13,fontWeight:700,
-          }}>🎲 เปิดรอบ!</button>
+          <button onClick={openRound} style={{width:'100%',padding:13,borderRadius:10,cursor:'pointer',fontFamily:G.font,
+            border:'1px solid #fbbf2440',background:'#fbbf2412',color:'#fbbf24',fontSize:13,fontWeight:700}}>
+            🎲 เปิดรอบ!</button>
         </div>
       ) : (
         <div>
@@ -1845,7 +1995,7 @@ function CasinoMiniGame({ onResult }) {
               <div key={i} style={{display:'flex',justifyContent:'space-between',alignItems:'center',
                 padding:'7px 10px',borderRadius:8,marginBottom:5,
                 background:r.wins?'#f8717108':'#4ade8008',border:`1px solid ${r.wins?'#f8717120':'#4ade8020'}`}}>
-                <span style={{fontSize:11,color:'#ffffff88'}}>{r.name} · ฿{r.bet.toLocaleString()}</span>
+                <span style={{fontSize:11,color:'#ffffff88'}}>{r.emoji} {r.name} · ฿{r.bet.toLocaleString()}</span>
                 <span style={{fontSize:12,fontWeight:700,color:r.wins?'#f87171':'#4ade80'}}>
                   {r.wins?`−฿${Math.abs(r.earn).toLocaleString()}`:`+฿${r.earn.toLocaleString()}`}
                 </span>
@@ -2264,10 +2414,11 @@ function LotteryModal({ onResult, onClose }) {
     setTimeout(() => {
       const r = Math.random();
       let result;
-      if (r < 0.005)       result = { win:true,  amount:5000, msg:"🎉 JACKPOT!! +฿5,000" };
-      else if (r < 0.02)   result = { win:true,  amount:1000, msg:"🎊 รางวัลที่ 2 +฿1,000" };
-      else if (r < 0.08)   result = { win:true,  amount:150,  msg:"✨ รางวัลเล็ก +฿150" };
-      else                 result = { win:false, amount:0,     msg:"😭 ไม่ถูกรางวัล" };
+      if (r < 0.001)       result = { win:true,  amount:50000, msg:"💰💰 MEGA JACKPOT!! +฿50,000" };
+      else if (r < 0.006)  result = { win:true,  amount:15000, msg:"🎉 JACKPOT! +฿15,000" };
+      else if (r < 0.025)  result = { win:true,  amount:2000,  msg:"🎊 รางวัลที่ 2 +฿2,000" };
+      else if (r < 0.10)   result = { win:true,  amount:200,   msg:"✨ รางวัลเล็ก +฿200" };
+      else                 result = { win:false, amount:0,      msg:"😭 ไม่ถูกรางวัล" };
       setRes(result); setPhase("done");
     }, 1200);
   };
@@ -2316,7 +2467,7 @@ const SCRATCH_LOSE_MSGS = [
 function ScratchModal({ onResult, onClose }) {
   const [revealed, setRevealed] = useState([false,false,false]);
   const [prizes] = useState(() => {
-    const pool = [0,0,0,0,0,0,5,10,22,45];
+    const pool = [0,0,0,0,0,100,300,800,2000,5000];
     return Array.from({length:3},()=>pool[Math.floor(Math.random()*pool.length)]);
   });
   const [loseMsg] = useState(()=>SCRATCH_LOSE_MSGS[Math.floor(Math.random()*SCRATCH_LOSE_MSGS.length)]);
@@ -2365,7 +2516,7 @@ function CrashModal({ onResult, onClose, bet=200 }) {
   if (crashRef.current === null) {
     const u = Math.random();
     if (u < 0.51) crashRef.current = "1.00"; // instant crash 51%
-    else crashRef.current = Math.min(10, 0.49 / (1 - u)).toFixed(2);
+    else crashRef.current = Math.min(50, 0.49 / (1 - u)).toFixed(2);
   }
   const intervalR = useRef(null);
   const firedRef  = useRef(false);
@@ -2448,7 +2599,7 @@ function FlipModal({ onResult, onClose, bet=300 }) {
   const flip = () => {
     setPhase("flipping");
     setTimeout(()=>{
-      const houseWins = Math.random() < 0.755;
+      const houseWins = Math.random() < 0.52;
       const result = houseWins ? (pick==="heads"?"tails":"heads") : pick;
       setFace(result); setPhase("done");
       const win = result===pick;
@@ -3951,14 +4102,17 @@ function GameScreen({ session, initPlayers, client, onEnd }) {
 
   const doBuy = (q) => {
     const p = priceR.current[selAsset.id]||selAsset.bp;
-    const cost = p * q;
     if (onlineRef.current && client?.ok) {
+      const cost = p * q;
       client.buy(selAsset.id, q);
       _snd.play('buy');
       addTrade({type:'buy',asset:selAsset,qty:q,price:p,total:cost});
       setModal(null); return;
     }
-    if (bankR.current < cost) { showNotif(`❌ ธนาคารไม่พอ ต้องการ ${fmt(cost)} — ฝากเงินก่อนนะ 🏦`,"#f87171"); return; }
+    const maxAffordable = Math.floor(bankR.current / p);
+    if (maxAffordable < 1) { showNotif(`❌ ธนาคารไม่พอ ต้องการ ${fmt(p)} — ฝากเงินก่อนนะ 🏦`,"#f87171"); return; }
+    q = Math.min(q, maxAffordable);
+    const cost = p * q;
     bankR.current -= cost;
     holdR.current[selAsset.id] = (holdR.current[selAsset.id]||0)+q;
     basisR.current[selAsset.id] = (basisR.current[selAsset.id]||0)+cost;
@@ -4106,7 +4260,7 @@ function GameScreen({ session, initPlayers, client, onEnd }) {
       cashR.current = Math.max(0, cashR.current + earn); syncCash();
       _snd.play('bust'); showNotif(`❌ ${fmt(earn)}`,"#f87171");
     }
-    careerCDR.current = 60; setCareerCD(60);
+    careerCDR.current = 90; setCareerCD(90);
   };
 
   const openGamble = (id, bet) => {
@@ -4136,7 +4290,7 @@ function GameScreen({ session, initPlayers, client, onEnd }) {
     } else if (res.win && res.amount > 0) {
       cashR.current += res.amount; gWinR.current += res.amount;
       syncCash(); setGWin(gWinR.current);
-      if (res.amount >= 3000) { _snd.play('jackpot'); setConfetti(true); setTimeout(()=>setConfetti(false),4000); }
+      if (res.amount >= 1500) { _snd.play('jackpot'); setConfetti(true); setTimeout(()=>setConfetti(false),4000); }
       else _snd.play('win');
       const profit = res.amount - paidCost;
       showNotif(notifMsg(res.msg, `✅ ชนะ +฿${profit.toLocaleString()}`), "#4ade80");
@@ -4648,7 +4802,7 @@ const myRank = allP.findIndex(p=>p.isMe)+1;
             </div>
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
               {[
-                {id:"lottery",  name:"🎟️ ล็อตเตอรี่", cost:100, desc:"ลุ้น Jackpot ฿5,000",   c:"#fbbf24", fixed:true},
+                {id:"lottery",  name:"🎟️ ล็อตเตอรี่", cost:100, desc:"ลุ้น Mega ฿50,000",     c:"#fbbf24", fixed:true},
                 {id:"scratch",  name:"🃏 Scratch",     cost:50,  desc:"ขูด 3 ช่อง ลุ้นรางวัล", c:"#4ade80", fixed:true},
                 {id:"crash",    name:"🚀 Crash",       cost:200, desc:"Cash Out ก่อน Crash!",   c:"#38bdf8", fixed:false},
                 {id:"flip",     name:"🪙 เหรียญ",      cost:200, desc:"ทายหัว/ก้อย รับ ×2",     c:"#f472b6", fixed:false},
@@ -4698,7 +4852,7 @@ const myRank = allP.findIndex(p=>p.isMe)+1;
                       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
                         <div>
                           <div style={{fontSize:14,fontWeight:700,color:c.color,marginBottom:2}}>{c.name}</div>
-                          <div style={{fontSize:9,color:"#ffffff44"}}>{c.desc} · cooldown 60 วิ/ครั้ง</div>
+                          <div style={{fontSize:9,color:"#ffffff44"}}>{c.desc} · cooldown 90 วิ/ครั้ง</div>
                         </div>
                         <button onClick={()=>doCareerBuy(c.id)} style={{
                           padding:"7px 14px",borderRadius:9,cursor:"pointer",fontFamily:G.font,
@@ -4740,7 +4894,7 @@ const myRank = allP.findIndex(p=>p.isMe)+1;
                       <span style={{fontSize:9,color:ready?"#4ade80":"#ffffff44",fontWeight:ready?700:400}}>
                         {ready?"✅ พร้อมทำงาน":(`⏳ ${careerCD} วิ`)}
                       </span>
-                      <button onClick={()=>ready&&setCareerModal(career)} style={{
+                      <button onClick={()=>{ if(ready){ setModal(null); setCareerModal(career); }}} style={{
                         padding:"9px 22px",borderRadius:10,cursor:ready?"pointer":"default",fontFamily:G.font,
                         border:`1px solid ${ready?c.color+"60":"#ffffff15"}`,
                         background:ready?`${c.color}20`:"#ffffff05",
@@ -5085,9 +5239,9 @@ const myRank = allP.findIndex(p=>p.isMe)+1;
               <GH color="#fb923c">🧑‍💼 อาชีพ (Career)</GH>
               <GT cols={["อาชีพ","ราคา","รายได้/ครั้ง","cooldown"]} rows={[
                 ["🍜 แม่ค้า","฿3,000","฿60–฿450","60 วิ"],
-                ["🚚 ไรเดอร์","฿12,000","฿380–฿900","60 วิ"],
-                ["🔧 ช่างซ่อม","฿40,000","฿350×ชิ้น / ฿2,200","60 วิ"],
-                ["🎰 เจ้าของบ่อน","฿70,000","ขึ้นกับ Odds+NPC","60 วิ"],
+                ["🚚 ไรเดอร์","฿7,000","฿188–฿1,500","90 วิ"],
+                ["🔧 ช่างซ่อม","฿18,000","฿100–฿3,500","90 วิ"],
+                ["🎰 เจ้าของบ่อน","฿35,000","ขึ้นกับ Odds+NPC","90 วิ"],
               ]}/>
               <Tip color="#fb923c">กดแท็บ 🧑‍💼 อาชีพ → เลือกอาชีพ → กด ▶ ทำงาน ทุก 60 วิ — Event บางตัวคูณรายได้อาชีพ!</Tip>
 
