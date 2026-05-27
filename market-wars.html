@@ -73,6 +73,7 @@ class MWClient {
 const G = {
   bg:"#05080f", panel:"#0c1421", border:"#ffffff12",
   text:"#e2e8f0", sub:"#64748b", font:"'IBM Plex Mono','Courier New',monospace",
+  glass:"rgba(12,20,33,0.82)", glassBorder:"rgba(255,255,255,0.07)",
 };
 
 const BUILD = "v2.5";
@@ -214,6 +215,16 @@ const CAREERS = [
   { id:'rider',    name:'🚚 ไรเดอร์',      cost:7000,  color:'#60a5fa', desc:'ส่งของเลือกเส้นทาง' },
   { id:'mechanic', name:'🔧 ช่างซ่อม',     cost:18000, color:'#a78bfa', desc:'ซ่อมอุปกรณ์ก่อนหมดเวลา' },
   { id:'casino',   name:'🎰 เจ้าของบ่อน',  cost:35000, color:'#f59e0b', desc:'ตั้ง Odds รับเงิน NPC' },
+];
+
+// ── LENDING SYSTEM ──
+const LOAN_NPCS = [
+  { id:"ln1", name:"สมชาย", avatar:"👨‍🌾", risk:"low",  riskColor:"#4ade80", rate:0.04, maxLoan:5000,  defaultChance:0.03, repayRounds:5,  desc:"นักเกษตร มั่นคง จ่ายตรง" },
+  { id:"ln2", name:"มาลี",   avatar:"👩‍💼", risk:"low",  riskColor:"#4ade80", rate:0.05, maxLoan:8000,  defaultChance:0.04, repayRounds:4,  desc:"พนักงานออฟฟิศ เงินเดือนประจำ" },
+  { id:"ln3", name:"ธนา",    avatar:"🧔",   risk:"mid",  riskColor:"#fbbf24", rate:0.08, maxLoan:20000, defaultChance:0.09, repayRounds:6,  desc:"เถ้าแก่ร้านเล็ก รายได้ผันผวน" },
+  { id:"ln4", name:"ปลา",    avatar:"🧑‍🍳",  risk:"mid",  riskColor:"#fbbf24", rate:0.09, maxLoan:15000, defaultChance:0.11, repayRounds:5,  desc:"เชฟฟรีแลนซ์ งานไม่แน่นอน" },
+  { id:"ln5", name:"บิ๊ก",   avatar:"💼",   risk:"high", riskColor:"#f87171", rate:0.15, maxLoan:50000, defaultChance:0.20, repayRounds:8,  desc:"นักธุรกิจหน้าใหม่ ความเสี่ยงสูง" },
+  { id:"ln6", name:"เฮง",    avatar:"🎰",   risk:"high", riskColor:"#f87171", rate:0.18, maxLoan:80000, defaultChance:0.25, repayRounds:6,  desc:"นักพนัน ดอกสูง เบี้ยวบ่อย" },
 ];
 
 const BOT_CHAT_POOL = [
@@ -424,6 +435,42 @@ function Spark({ hist, up, w=64, h=22 }) {
       <polyline points={pts} fill="none" stroke={c} strokeWidth="1.5" strokeLinejoin="round"/>
     </svg>
   );
+}
+
+// ── AMBIENT BACKGROUND PARTICLES ──
+function ParticleCanvas() {
+  const cvRef = useRef(null);
+  useEffect(()=>{
+    const cv = cvRef.current;
+    const ctx = cv.getContext("2d");
+    let W, H, raf;
+    const resize = ()=>{ W=cv.width=window.innerWidth; H=cv.height=window.innerHeight; };
+    resize();
+    const N = 55;
+    const colors = ["56,189,248","129,140,248","251,191,36","74,222,128"];
+    const pts = Array.from({length:N},()=>({
+      x:Math.random()*W, y:Math.random()*H,
+      r:Math.random()*1.4+0.3,
+      dx:(Math.random()-0.5)*0.25, dy:(Math.random()-0.5)*0.25,
+      op:Math.random()*0.10+0.03,
+      c:colors[Math.floor(Math.random()*colors.length)],
+    }));
+    const draw=()=>{
+      ctx.clearRect(0,0,W,H);
+      pts.forEach(p=>{
+        ctx.beginPath(); ctx.arc(p.x,p.y,p.r,0,Math.PI*2);
+        ctx.fillStyle=`rgba(${p.c},${p.op})`; ctx.fill();
+        p.x+=p.dx; p.y+=p.dy;
+        if(p.x<0||p.x>W) p.dx*=-1;
+        if(p.y<0||p.y>H) p.dy*=-1;
+      });
+      raf=requestAnimationFrame(draw);
+    };
+    draw();
+    window.addEventListener("resize",resize);
+    return()=>{ cancelAnimationFrame(raf); window.removeEventListener("resize",resize); };
+  },[]);
+  return <canvas ref={cvRef} style={{position:"fixed",top:0,left:0,pointerEvents:"none",zIndex:0}}/>;
 }
 
 function Label({ children }) {
@@ -744,11 +791,12 @@ function Modal({ onClose, title, children }) {
       background:"#00000099",backdropFilter:"blur(8px)"}} onClick={onClose}>
       <div onClick={e=>e.stopPropagation()} style={{
         width:"100%",maxWidth:480,borderRadius:"22px 22px 0 0",
-        background:"linear-gradient(180deg,#0e1c30 0%,#0a1628 100%)",
-        border:"1px solid #ffffff14",
+        background:"linear-gradient(180deg,rgba(14,28,48,0.96) 0%,rgba(10,22,40,0.98) 100%)",
+        backdropFilter:"blur(32px)",WebkitBackdropFilter:"blur(32px)",
+        border:"1px solid rgba(255,255,255,0.10)",
         borderBottom:"none",padding:"20px 20px 28px",maxHeight:"92vh",overflowY:"auto",
         animation:"modal-slide-up 0.32s cubic-bezier(0.34,1.12,0.64,1)",
-        boxShadow:"0 -8px 60px #00000088, 0 -2px 20px #38bdf80a",
+        boxShadow:"0 -8px 60px #00000099, 0 -2px 30px #38bdf812, inset 0 1px 0 #ffffff08",
       }}>
         {/* drag handle */}
         <div style={{width:40,height:4,borderRadius:2,background:"#ffffff18",margin:"0 auto 16px",}}/>
@@ -2513,10 +2561,40 @@ function ScratchModal({ onResult, onClose }) {
   );
 }
 
+function CrashGraph({ hist, crashed, c }) {
+  const W=280, H=90;
+  if (hist.length < 2) return <div style={{width:W,height:H}}/>;
+  const mn=1, mx=Math.max(...hist, 2);
+  const pts = hist.map((v,i)=>`${(i/(hist.length-1))*W},${H-((v-mn)/(mx-mn+0.001))*(H-6)+3}`).join(" ");
+  const lastX=(hist.length-1)/(hist.length-1)*W;
+  const lastY=H-((hist[hist.length-1]-mn)/(mx-mn+0.001))*(H-6)+3;
+  return (
+    <svg width={W} height={H} style={{display:"block",margin:"0 auto 8px",borderRadius:10,background:"#ffffff04",overflow:"visible"}}>
+      <defs>
+        <linearGradient id="cgr" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor={c} stopOpacity="0.35"/>
+          <stop offset="100%" stopColor={c} stopOpacity="0"/>
+        </linearGradient>
+      </defs>
+      <polygon points={`0,${H} ${pts} ${lastX},${H}`} fill="url(#cgr)"/>
+      <polyline points={pts} fill="none" stroke={c} strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round"/>
+      {crashed
+        ? <circle cx={lastX} cy={lastY} r="6" fill="#f87171" stroke="#00000055" strokeWidth="1.5"/>
+        : <circle cx={lastX} cy={lastY} r="4" fill={c} stroke="#00000055" strokeWidth="1">
+            <animate attributeName="r" values="4;6;4" dur="0.8s" repeatCount="indefinite"/>
+            <animate attributeName="opacity" values="1;0.6;1" dur="0.8s" repeatCount="indefinite"/>
+          </circle>
+      }
+    </svg>
+  );
+}
+
 function CrashModal({ onResult, onClose, bet=200 }) {
   const [phase, setPhase] = useState("bet");
   const [mult,  setMult]  = useState(1.00);
+  const [hist,  setHist]  = useState([1.00]);
   const multR = useRef(1.00);
+  const histR2 = useRef([1.00]);
   const crashRef = useRef(null);
   if (crashRef.current === null) {
     const u = Math.random();
@@ -2531,7 +2609,9 @@ function CrashModal({ onResult, onClose, bet=200 }) {
     setPhase("live");
     intervalR.current = setInterval(()=>{
       multR.current = Math.round((multR.current+0.04)*100)/100;
+      histR2.current = [...histR2.current, multR.current].slice(-120);
       setMult(multR.current);
+      setHist([...histR2.current]);
       if(multR.current >= parseFloat(crashRef.current)){
         clearInterval(intervalR.current);
         setPhase("crashed");
@@ -2560,12 +2640,14 @@ function CrashModal({ onResult, onClose, bet=200 }) {
         </div>
       )}
       {(phase==="live"||phase==="crashed") && (
-        <div style={{textAlign:"center",padding:"10px 0"}}>
-          <div style={{fontSize:52,fontWeight:900,color:c,marginBottom:8,
-            textShadow:`0 0 20px ${c}55`,fontVariantNumeric:"tabular-nums",
+        <div style={{textAlign:"center",padding:"4px 0"}}>
+          <CrashGraph hist={hist} crashed={phase==="crashed"} c={c}/>
+          <div style={{fontSize:44,fontWeight:900,color:c,marginBottom:4,
+            textShadow:`0 0 24px ${c}77, 0 0 48px ${c}33`,fontVariantNumeric:"tabular-nums",
+            transition:"color 0.2s",lineHeight:1.1,
           }}>{phase==="crashed"?"💥 CRASH":mult.toFixed(2)+"×"}</div>
-          <div style={{color:"#ffffff33",fontSize:11,marginBottom:20}}>
-            {phase==="crashed"?`💸 เสีย ฿${bet.toLocaleString()}`:`ถ้า Cash Out ตอนนี้: +฿${Math.max(0,Math.round(bet*mult-bet)).toLocaleString()}`}
+          <div style={{color:"#ffffff33",fontSize:11,marginBottom:16}}>
+            {phase==="crashed"?`💸 เสีย ฿${bet.toLocaleString()}`:`Cash Out ตอนนี้: +฿${Math.max(0,Math.round(bet*mult-bet)).toLocaleString()}`}
           </div>
           {phase==="crashed" && (
             <div style={{background:"#f8717110",border:"1px solid #f8717125",borderRadius:9,padding:"10px 12px",marginBottom:12,textAlign:"left"}}>
@@ -2575,9 +2657,9 @@ function CrashModal({ onResult, onClose, bet=200 }) {
           )}
           {phase==="live" ? (
             <button onClick={cashOut} style={{width:"100%",padding:16,borderRadius:10,border:"none",
-              background:"linear-gradient(135deg,#14532d,#166534)",color:"#4ade80",
+              background:`linear-gradient(135deg,#14532d,#166534)`,color:"#4ade80",
               cursor:"pointer",fontSize:16,fontWeight:900,fontFamily:G.font,
-              boxShadow:"0 4px 20px #14532d66"}}>💰 CASH OUT ×{mult.toFixed(2)}</button>
+              boxShadow:`0 4px 20px #14532d66, 0 0 0 1px #4ade8022`}}>💰 CASH OUT ×{mult.toFixed(2)}</button>
           ) : (
             <button onClick={()=>safeResult({win:false,amount:0,msg:`💥 Crash ที่ ${crashRef.current}× เสีย ฿${bet}`})} style={{
               width:"100%",padding:13,borderRadius:10,border:"1px solid #f8717140",
@@ -3249,6 +3331,59 @@ function GachaOpenModal({ item, boxType, onClose }) {
   );
 }
 
+function LoanNpcCard({ npc, cash, onLend }) {
+  const [lendAmt, setLendAmt] = useState(Math.round(npc.maxLoan*0.5));
+  const riskLabel = {low:"ต่ำ",mid:"กลาง",high:"สูง"}[npc.risk];
+  const totalReturn = Math.round(lendAmt * npc.rate * npc.repayRounds);
+  return (
+    <div style={{background:G.panel,borderRadius:13,padding:"12px 14px",
+      border:`1px solid ${npc.riskColor}22`,boxShadow:`0 2px 12px ${npc.riskColor}08`}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:10}}>
+        <div style={{display:"flex",alignItems:"center",gap:8}}>
+          <span style={{fontSize:22}}>{npc.avatar}</span>
+          <div>
+            <div style={{fontWeight:700,fontSize:13,color:"#e2e8f0"}}>{npc.name}</div>
+            <div style={{fontSize:8,color:"#ffffff44"}}>{npc.desc}</div>
+          </div>
+        </div>
+        <div style={{fontSize:8,padding:"2px 8px",borderRadius:6,
+          background:`${npc.riskColor}18`,border:`1px solid ${npc.riskColor}40`,
+          color:npc.riskColor,fontWeight:700}}>ความเสี่ยง {riskLabel}</div>
+      </div>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:6,marginBottom:10}}>
+        {[
+          {l:"ดอกเบี้ย",v:`${(npc.rate*100).toFixed(0)}%/30วิ`,c:"#4ade80"},
+          {l:"งวดชำระ",v:`${npc.repayRounds} งวด`,c:"#38bdf8"},
+          {l:"รวมดอก",v:`+${fmt(totalReturn)}`,c:"#fbbf24"},
+        ].map(({l,v,c})=>(
+          <div key={l} style={{background:"#ffffff06",borderRadius:8,padding:"6px 8px"}}>
+            <div style={{fontSize:7,color:"#ffffff33",marginBottom:2}}>{l}</div>
+            <div style={{fontSize:11,fontWeight:700,color:c}}>{v}</div>
+          </div>
+        ))}
+      </div>
+      <div style={{marginBottom:8}}>
+        <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}>
+          <span style={{fontSize:9,color:"#ffffff44"}}>จำนวนที่ให้กู้</span>
+          <span style={{fontSize:9,color:"#38bdf8",fontWeight:700}}>{fmt(lendAmt)}</span>
+        </div>
+        <input type="range" min={Math.round(npc.maxLoan*0.1)} max={npc.maxLoan} step={100}
+          value={lendAmt} onChange={e=>setLendAmt(+e.target.value)}
+          style={{width:"100%",accentColor:npc.riskColor}}/>
+        <div style={{display:"flex",justifyContent:"space-between",fontSize:8,color:"#ffffff22",marginTop:2}}>
+          <span>{fmt(Math.round(npc.maxLoan*0.1))}</span><span>{fmt(npc.maxLoan)}</span>
+        </div>
+      </div>
+      <button onClick={()=>onLend(npc,lendAmt)} disabled={cash<lendAmt} style={{
+        width:"100%",padding:"9px 0",borderRadius:9,cursor:"pointer",fontFamily:G.font,
+        border:`1px solid ${npc.riskColor}50`,background:`${npc.riskColor}18`,
+        color:npc.riskColor,fontSize:11,fontWeight:700,
+        opacity: cash<lendAmt ? 0.45 : 1,
+      }}>💳 ให้กู้ {fmt(lendAmt)} → รับ {fmt(totalReturn)} ดอก</button>
+    </div>
+  );
+}
+
 // ── GAME SCREEN ──
 function GameScreen({ session, initPlayers, client, onEnd }) {
   const cfg       = MODES[session.mode];
@@ -3338,6 +3473,15 @@ function GameScreen({ session, initPlayers, client, onEnd }) {
   const [confetti,     setConfetti]     = useState(false);
   const [confirmEnd,   setConfirmEnd]   = useState(false);
   const activeBetR = useRef(0);
+
+  // ── LENDING SYSTEM ──
+  const loansR     = useRef([]);
+  const [loans,    setLoans]    = useState([]);
+  const loanTickR  = useRef(0);
+  const loanIdR    = useRef(0);
+
+  // ── MARKET FLASH (visual effect on crash events) ──
+  const [mktFlash, setMktFlash] = useState(null); // "red" | null
   const [betSelectId,  setBetSelectId]  = useState(null);
   const [plinkoKey,    setPlinkoKey]    = useState(0);
   const tickerSnapR    = useRef({prices:{...Object.fromEntries(gameAssets.map(a=>[a.id,a.bp]))}, hists:{}});
@@ -3408,6 +3552,12 @@ function GameScreen({ session, initPlayers, client, onEnd }) {
             if(msg.activeEvent && !wasActive) {
               _snd.play('event');
               setActiveEv({...msg.activeEvent, _ts:Date.now()});
+              // flash screen on crash events
+              const crashIds = ["whale","hack","bankrupt","oil_war","rate_hike","crypto_ban","fake"];
+              if (crashIds.includes(msg.activeEvent.id)) {
+                setMktFlash("red");
+                setTimeout(()=>setMktFlash(null), 600);
+              }
             } else {
               setActiveEv(msg.activeEvent || null);
             }
@@ -3453,6 +3603,9 @@ function GameScreen({ session, initPlayers, client, onEnd }) {
         case "EVENT":
           setActiveEv({...msg.event, _ts:Date.now()});
           _snd.play('event');
+          if (msg.event?.id && ["whale","hack","bankrupt","oil_war","rate_hike","crypto_ban","fake"].includes(msg.event.id)) {
+            setMktFlash("red"); setTimeout(()=>setMktFlash(null), 600);
+          }
           if (msg.event?.hypeEff) {
             Object.entries(msg.event.hypeEff).forEach(([t, mult]) => {
               hypeIdxR.current[t] = Math.min(6.0, Math.max(0.15, hypeIdxR.current[t] * mult));
@@ -3576,6 +3729,17 @@ function GameScreen({ session, initPlayers, client, onEnd }) {
   };
   const syncBasis = () => setBasis({...basisR.current});
   const syncShort = () => setShort({...shortR.current});
+
+  const doLend = (npc, amount) => {
+    if (cashR.current < amount) { showNotif("❌ เงินสดไม่พอ","#f87171"); return; }
+    if (loansR.current.some(l=>l.npcId===npc.id)) { showNotif("❌ ให้กู้รายนี้อยู่แล้ว","#f87171"); return; }
+    cashR.current -= amount; syncCash();
+    const loan = { id: `loan${++loanIdR.current}`, npcId:npc.id, amount, rate:npc.rate, round:0, totalRounds:npc.repayRounds };
+    loansR.current = [...loansR.current, loan];
+    setLoans([...loansR.current]);
+    _snd.play('buy');
+    showNotif(`💳 ให้กู้ ${npc.name} ฿${amount.toLocaleString()} · ดอก ${(npc.rate*100).toFixed(0)}%/30วิ`, "#38bdf8");
+  };
   const myNW = () => {
     const holdVal = Object.entries(holdR.current).reduce((s,[id,q])=>s+(priceR.current[id]||0)*q, 0);
     const shortObl = Object.entries(shortR.current).reduce((s,[id,pos])=>s+(priceR.current[id]||0)*pos.qty, 0);
@@ -4092,6 +4256,39 @@ function GameScreen({ session, initPlayers, client, onEnd }) {
     const id = setInterval(() => {
       // career cooldown
       if (careerCDR.current > 0) { careerCDR.current--; setCareerCD(careerCDR.current); }
+      // lending tick — process every 30s
+      loanTickR.current++;
+      if (loanTickR.current % 30 === 0 && loansR.current.length > 0) {
+        let changed = false;
+        const remaining = [];
+        loansR.current.forEach(loan => {
+          const npc = LOAN_NPCS.find(n => n.id === loan.npcId);
+          if (!npc) return;
+          if (Math.random() < npc.defaultChance) {
+            showNotif(`💀 ${npc.name} เบี้ยวหนี! เสีย ฿${loan.amount.toLocaleString()}`, "#f87171");
+            _snd.play('bust');
+            changed = true;
+          } else {
+            const interest = Math.round(loan.amount * npc.rate);
+            cashR.current += interest;
+            syncCash();
+            const newRound = loan.round + 1;
+            if (newRound >= loan.totalRounds) {
+              cashR.current += loan.amount;
+              syncCash();
+              _snd.play('jackpot');
+              showNotif(`✅ ${npc.name} คืนต้นทุน! +฿${loan.amount.toLocaleString()} (ดอก +฿${interest.toLocaleString()})`, "#4ade80");
+              changed = true;
+            } else {
+              _snd.play('income');
+              showNotif(`💰 ดอกเบี้ยจาก ${npc.name}: +฿${interest.toLocaleString()} (งวด ${newRound}/${loan.totalRounds})`, "#4ade80");
+              remaining.push({...loan, round: newRound});
+              changed = true;
+            }
+          }
+        });
+        if (changed) { loansR.current = remaining; setLoans([...remaining]); }
+      }
       boxTimerR.current--;
         setBoxTimer(boxTimerR.current);
         if (boxTimerR.current <= 0) {
@@ -4355,6 +4552,12 @@ const myRank = allP.findIndex(p=>p.isMe)+1;
 
   return (
     <div style={{minHeight:"100vh",background:G.bg,fontFamily:G.font,paddingBottom:72}}>
+      <ParticleCanvas/>
+      {/* Market Flash Overlay */}
+      {mktFlash && (
+        <div style={{position:"fixed",inset:0,pointerEvents:"none",zIndex:9990,
+          background:"#f8717118",animation:"market-flash 0.6s ease forwards"}}/>
+      )}
 
       {/* ONLINE STATUS BAR */}
       {ONLINE_MODE && (
@@ -4371,16 +4574,22 @@ const myRank = allP.findIndex(p=>p.isMe)+1;
         </div>
       )}
 
+      {/* TICKER TAPE */}
+      <TickerTape assets={gameAssets} prices={tickerSnap.prices} hists={tickerSnap.hists}/>
+
       {/* TOP BAR */}
       <div ref={topbarRef} style={{position:"sticky",top:0,zIndex:200,
-        background:`linear-gradient(180deg,${G.bg}fc 0%,${G.bg}ee 100%)`,
-        backdropFilter:"blur(20px)",
-        borderBottom:`1px solid ${G.border}`,
-        boxShadow:"0 4px 24px #00000044"}}>
+        background:`linear-gradient(180deg,rgba(5,8,15,0.96) 0%,rgba(5,8,15,0.90) 100%)`,
+        backdropFilter:"blur(28px)",WebkitBackdropFilter:"blur(28px)",
+        borderBottom:`1px solid rgba(255,255,255,0.08)`,
+        boxShadow:"0 4px 32px #00000055, 0 1px 0 #ffffff06"}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"10px 14px"}}>
           <div style={{minWidth:100}}>
             <div style={{fontSize:7,letterSpacing:3,color:"#ffffff20",marginBottom:3}}>P&L</div>
-            <div style={{display:"flex",alignItems:"baseline",gap:4}}>
+            <div style={{display:"flex",alignItems:"baseline",gap:4,
+              filter: displayNW>=initCash
+                ? "drop-shadow(0 0 8px #4ade8066) drop-shadow(0 0 20px #4ade8022)"
+                : "drop-shadow(0 0 8px #f8717155)"}}>
               <AnimNum value={displayNW - initCash} color={displayNW>=initCash?"#4ade80":"#f87171"} size={20}/>
             </div>
             <div style={{fontSize:8,marginTop:1,
@@ -4494,6 +4703,7 @@ const myRank = allP.findIndex(p=>p.isMe)+1;
           {k:"career",    l:`🧑‍💼 อาชีพ${career?" ✦":""}`},
           {k:"hype",      l:"🎴 กระแส"},
           {k:"gamble",    l:"🎲 Gamble"},
+          {k:"lending",   l:`💳 กู้${loans.length>0?` ·${loans.length}`:""}`},
           {k:"rank",      l:"🏆 Rank"},
           {k:"history",   l:`📋 ประวัติ${tradeHistory.length>0?` ${tradeHistory.length}`:""}`},
           {k:"chat",      l:`💬 แชท${chatMsgs.length>0?" ·":""}`},
@@ -4852,6 +5062,72 @@ const myRank = allP.findIndex(p=>p.isMe)+1;
                 </button>
               ))}
             </div>
+          </div>
+        )}
+
+        {/* LENDING TAB */}
+        {tab==="lending" && (
+          <div>
+            {/* Stats Header */}
+            <div style={{background:"#38bdf808",border:"1px solid #38bdf820",borderRadius:12,padding:"12px 14px",marginBottom:14}}>
+              <div style={{fontSize:10,color:"#38bdf8aa",marginBottom:6,fontWeight:700}}>💳 ระบบปล่อยกู้ — รับดอกเบี้ยทุก 30 วิ</div>
+              <div style={{display:"flex",justifyContent:"space-between",fontSize:9,color:"#ffffff44"}}>
+                <span>เงินกู้คงค้าง: <span style={{color:"#38bdf8"}}>{loans.length} รายการ</span></span>
+                <span>เงินค้างจ่าย: <span style={{color:"#fbbf24"}}>{fmt(loans.reduce((s,l)=>s+l.amount,0))}</span></span>
+              </div>
+              <div style={{fontSize:8,color:"#ffffff22",marginTop:6,lineHeight:1.6}}>
+                ⚠️ ผู้กู้อาจเบี้ยวได้ตามระดับความเสี่ยง · เงินต้นไม่มีประกัน
+              </div>
+            </div>
+
+            {/* Available Borrowers */}
+            <div style={{fontSize:9,letterSpacing:3,color:"#ffffff20",marginBottom:10}}>ผู้กู้ที่พร้อม</div>
+            <div style={{display:"flex",flexDirection:"column",gap:8,marginBottom:18}}>
+              {LOAN_NPCS.filter(n=>!loans.some(l=>l.npcId===n.id)).map(npc=>(
+                <LoanNpcCard key={npc.id} npc={npc} cash={cash} onLend={doLend}/>
+              ))}
+            </div>
+
+            {/* Active Loans */}
+            {loans.length > 0 && (
+              <>
+                <div style={{fontSize:9,letterSpacing:3,color:"#ffffff20",marginBottom:10}}>เงินกู้ที่ค้างอยู่</div>
+                <div style={{display:"flex",flexDirection:"column",gap:8}}>
+                  {loans.map(loan=>{
+                    const npc = LOAN_NPCS.find(n=>n.id===loan.npcId);
+                    if (!npc) return null;
+                    const progress = loan.round / loan.totalRounds;
+                    const nextInterest = Math.round(loan.amount * npc.rate);
+                    return (
+                      <div key={loan.id} style={{background:G.panel,borderRadius:12,padding:"11px 13px",
+                        border:`1px solid ${npc.riskColor}30`}}>
+                        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
+                          <div style={{display:"flex",alignItems:"center",gap:6}}>
+                            <span style={{fontSize:18}}>{npc.avatar}</span>
+                            <div>
+                              <div style={{fontSize:12,fontWeight:700,color:"#e2e8f0"}}>{npc.name}</div>
+                              <div style={{fontSize:8,color:"#ffffff33"}}>เงินต้น {fmt(loan.amount)}</div>
+                            </div>
+                          </div>
+                          <div style={{textAlign:"right"}}>
+                            <div style={{fontSize:10,color:"#4ade80",fontWeight:700}}>+{fmt(nextInterest)}/งวด</div>
+                            <div style={{fontSize:8,color:"#ffffff33"}}>{loan.round}/{loan.totalRounds} งวด</div>
+                          </div>
+                        </div>
+                        <div style={{height:4,background:"#ffffff08",borderRadius:2,overflow:"hidden"}}>
+                          <div style={{height:"100%",width:`${progress*100}%`,background:npc.riskColor,
+                            transition:"width 0.5s ease",borderRadius:2}}/>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </>
+            )}
+
+            {LOAN_NPCS.filter(n=>!loans.some(l=>l.npcId===n.id)).length===0 && loans.length===LOAN_NPCS.length && (
+              <div style={{textAlign:"center",color:"#ffffff22",fontSize:10,padding:20}}>ให้กู้ครบทุกรายแล้ว — รอดอกเบี้ยทุก 30 วิ</div>
+            )}
           </div>
         )}
 
@@ -5534,6 +5810,9 @@ ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
 @keyframes horseGallop { 0%,100%{transform:translateY(0) rotate(-4deg)} 50%{transform:translateY(-5px) rotate(4deg)} }
 @keyframes star-float { 0%,100%{ transform:translateY(0) rotate(0deg); opacity:0.4; } 50%{ transform:translateY(-8px) rotate(8deg); opacity:0.8; } }
 @keyframes lobby-bg { 0%,100%{ background-position:0% 50%; } 50%{ background-position:100% 50%; } }
+@keyframes market-flash { 0%{ opacity:1; } 100%{ opacity:0; } }
+@keyframes loan-pulse { 0%,100%{ box-shadow:0 0 0 0 #38bdf844; } 50%{ box-shadow:0 0 0 6px #38bdf800; } }
+@keyframes crash-curve { from{ stroke-dashoffset:1000; } to{ stroke-dashoffset:0; } }
 
 /* ── GLOBAL BUTTON MICRO-INTERACTIONS ── */
 button {
