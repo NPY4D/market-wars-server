@@ -167,6 +167,10 @@ const GAME_TITLES = [
   "Point Blank","MapleStory","Wuthering Waves","Zenless Zone Zero",
 ];
 const HYPE_DEALER_CUT = 0.82; // ขายทันที = 58% ของราคาตลาด
+// โอกาสขายออกต่อรอบ (base) — คูณด้วย price ratio + hype
+const RARITY_DEMAND = { N:0.55, R:0.35, SR:0.18, SSR:0.07, UR:0.025 };
+const DEMAND_INTERVAL_MIN = 28; // วิน้อยสุดก่อน demand check
+const DEMAND_INTERVAL_MAX = 48; // วินาทีมากสุด
 
 const RARITY_TABLE = {
   card:[
@@ -2613,8 +2617,8 @@ function CrashModal({ onResult, onClose, bet=200 }) {
   const crashRef = useRef(null);
   if (crashRef.current === null) {
     const u = Math.random();
-    if (u < 0.04) crashRef.current = "1.00"; // 4% instant crash (house edge)
-    else crashRef.current = Math.min(50, 0.96 / (1 - u)).toFixed(2);
+    if (u < 0.08) crashRef.current = "1.00"; // 8% instant crash (house edge)
+    else crashRef.current = Math.min(50, 0.92 / (1 - u)).toFixed(2);
   }
   const intervalR = useRef(null);
   const firedRef  = useRef(false);
@@ -2623,7 +2627,9 @@ function CrashModal({ onResult, onClose, bet=200 }) {
   const start = () => {
     setPhase("live");
     intervalR.current = setInterval(()=>{
-      multR.current = Math.round((multR.current+0.04)*100)/100;
+      // exponential growth: ×1.038 ต่อ tick — เร่งเมื่อสูง ทำให้ตัดสินใจยากขึ้น
+      multR.current = Math.round(multR.current * 1.038 * 100) / 100;
+      if (multR.current < 1.01) multR.current = 1.01; // ป้องกัน stuck ที่ 1.00
       histR2.current = [...histR2.current, multR.current].slice(-120);
       setMult(multR.current);
       setHist([...histR2.current]);
@@ -2821,56 +2827,174 @@ function RouletteModal({ onResult, onClose, bet=150 }) {
   );
 }
 
-function ListItemModal({ item, onList, onClose }) {
-  const [price, setPrice] = useState(item.bp);
-  const [custom, setCustom] = useState(String(item.bp));
+function ListItemModal({ item, hypeIdx={}, onList, onClose }) {
+  const hIdx   = hypeIdx[item.type] || 1;
+  const mktVal = Math.round(item.bp * hIdx);
+  const MAX_PRICE = mktVal * 4; // hard cap — ตลาดไม่รับแพงกว่านี้
+
+  const [price, setPrice] = useState(mktVal);
+  const [custom, setCustom] = useState(String(mktVal));
+
+  const setP = (n) => { setPrice(n); setCustom(String(n)); };
   const handleCustom = (v) => {
     setCustom(v);
     const n = parseInt(v.replace(/\D/g,""));
-    if(!isNaN(n) && n > 0) setPrice(n);
+    if (!isNaN(n) && n > 0) setPrice(n);
   };
+
+  // ── demand analysis ──
+  const ratio   = price / Math.max(mktVal, 1);
+  const blocked = price > MAX_PRICE;
+  const base    = RARITY_DEMAND[item.rarity] || 0.15;
+  const pMult   = ratio<=0.6?2.8:ratio<=0.75?2.0:ratio<=0.9?1.4:ratio<=1.05?1.0:ratio<=1.3?0.55:ratio<=1.8?0.18:ratio<=2.5?0.06:0.01;
+  const demandPct = blocked ? 0 : Math.round(Math.min(0.95, base * pMult * Math.min(hIdx, 2)) * 100);
+
+  // คาดเวลาขาย
+  const avgRounds = demandPct > 0 ? (100 / demandPct) : 999;
+  const avgSec    = Math.round(avgRounds * 38); // ~38s per cycle average
+  const timeStr   = demandPct === 0 ? "ไม่มีทางขายได้"
+                  : avgSec < 60    ? `~${avgSec}วิ`
+                  : avgSec < 3600  ? `~${Math.round(avgSec/60)}นาที`
+                  : "นานมาก";
+
+  const tier =
+    blocked        ? {l:"🚫 เกินราคา cap",         c:"#f87171", bg:"#f8717112", advice:"ตลาดไม่รับราคาเกิน 4× ราคาตลาด"} :
+    demandPct >= 65? {l:"🔥 ขายออกเร็วมาก",         c:"#f59e0b", bg:"#f59e0b10", advice:"ราคาดีมาก ตลาดแย่งซื้อ"} :
+    demandPct >= 40? {l:"⚡ ขายออกได้ดี",            c:"#4ade80", bg:"#4ade8010", advice:"ราคาสมเหตุสมผล"} :
+    demandPct >= 20? {l:"✅ ขายได้ แต่ช้าหน่อย",    c:"#38bdf8", bg:"#38bdf810", advice:"อาจรอหลายรอบ"} :
+    demandPct >= 8 ? {l:"🧊 ขายช้ามาก",             c:"#94a3b8", bg:"#94a3b810", advice:"ราคาสูงกว่าตลาด ลองลดดู"} :
+                     {l:"❌ แทบขายไม่ออกเลย",        c:"#f87171", bg:"#f8717110", advice:"ตลาดจะไม่ซื้อในราคานี้"};
+
+  // sweet spot = ราคาที่ demand ≥ 40%
+  const sweetMax = Math.round(mktVal * 1.05);
+  const sweetMin = Math.round(mktVal * 0.7);
+
+  const presets = [
+    { p: Math.round(mktVal*0.6),  l:"⚡ ขายทันที", sub:`60% ตลาด` },
+    { p: Math.round(mktVal*0.85), l:"✅ ขายเร็ว",   sub:`85% ตลาด` },
+    { p: mktVal,                  l:"📊 ราคาตลาด", sub:`100%` },
+    { p: Math.round(mktVal*1.3),  l:"💰 กำไร",      sub:`130% ตลาด` },
+  ];
+
   return (
     <Modal onClose={onClose} title={`🏪 ลงขาย ${item.emoji} ${item.name}`}>
-      <div style={{background:`${item.rarityColor}12`,border:`1px solid ${item.rarityColor}30`,borderRadius:10,padding:"12px 14px",marginBottom:14,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-        <div>
-          <div style={{fontSize:9,color:"#ffffff33",marginBottom:2}}>ราคาที่จ่ายตอนเปิดกล่อง</div>
-          <div style={{fontSize:20,fontWeight:900,color:item.rarityColor}}>{fmt(item.bp)}</div>
+      {/* Item info */}
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",
+        background:`${item.rarityColor}12`,border:`1px solid ${item.rarityColor}28`,
+        borderRadius:10,padding:"10px 14px",marginBottom:14}}>
+        <div style={{display:"flex",alignItems:"center",gap:10}}>
+          <span style={{fontSize:28}}>{item.emoji}</span>
+          <div>
+            <div style={{fontSize:12,fontWeight:700,color:item.rarityColor}}>{item.name}</div>
+            <div style={{fontSize:8,color:"#ffffff44"}}>{item.rarity} · เปิดกล่อง {fmt(item.bp)}</div>
+          </div>
         </div>
         <div style={{textAlign:"right"}}>
-          <div style={{fontSize:9,color:"#ffffff33",marginBottom:2}}>Rarity</div>
-          <div style={{fontSize:14,fontWeight:700,color:item.rarityColor}}>{item.rarity}</div>
+          <div style={{fontSize:8,color:"#ffffff33",marginBottom:2}}>ราคาตลาดตอนนี้</div>
+          <div style={{fontSize:16,fontWeight:900,color:"#e2e8f0"}}>{fmt(mktVal)}</div>
+          {hIdx !== 1 && <div style={{fontSize:7,color:"#fbbf2466"}}>hype ×{hIdx.toFixed(2)}</div>}
         </div>
       </div>
-      <Label>ตั้งราคาขาย (ตั้งเองได้เลย)</Label>
-      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:6,marginBottom:10}}>
-        {[0.5, 1.0, 2.0].map(m=>{
-          const p=Math.round(item.bp*m); const active=price===p;
+
+      {/* Sweet spot banner */}
+      <div style={{background:"#4ade8008",border:"1px solid #4ade8020",borderRadius:8,
+        padding:"7px 12px",marginBottom:10,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+        <div style={{fontSize:8,color:"#4ade8088"}}>📈 ช่วงขายดี (demand ≥ 40%)</div>
+        <div style={{fontSize:9,fontWeight:700,color:"#4ade80"}}>{fmt(sweetMin)} – {fmt(sweetMax)}</div>
+      </div>
+
+      {/* Preset buttons */}
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr",gap:5,marginBottom:10}}>
+        {presets.map(({p,l,sub})=>{
+          const active = price === p;
+          const r2 = p/Math.max(mktVal,1);
+          const pm2 = r2<=0.6?2.8:r2<=0.75?2.0:r2<=0.9?1.4:r2<=1.05?1.0:r2<=1.3?0.55:r2<=1.8?0.18:0.06;
+          const d2 = Math.round(Math.min(0.95, base*pm2*Math.min(hIdx,2))*100);
+          const dc = d2>=40?"#4ade80":d2>=20?"#38bdf8":d2>=8?"#fbbf24":"#f87171";
           return (
-            <button key={m} onClick={()=>{setPrice(p);setCustom(String(p));}} style={{
+            <button key={p} onClick={()=>setP(p)} style={{
               padding:"8px 4px",borderRadius:8,cursor:"pointer",fontFamily:G.font,textAlign:"center",
-              border:`1px solid ${active?"#fbbf2455":"#ffffff10"}`,
-              background:active?"#fbbf2412":"#ffffff05",
-              color:active?"#fbbf24":"#ffffff44",fontSize:9,fontWeight:700,
+              border:`2px solid ${active?"#fbbf2466":"#ffffff0d"}`,
+              background:active?"#fbbf2415":"#ffffff04",
+              transition:"all .12s",
             }}>
-              <div style={{marginBottom:2}}>{m<1?"ขาดทุน":m===1?"ทุน":"×2"}</div>
-              <div style={{fontSize:11,color:active?"#fbbf24":"#ffffff55"}}>{fmt(p)}</div>
+              <div style={{fontSize:8,fontWeight:700,color:active?"#fbbf24":"#ffffff66",marginBottom:1}}>{l}</div>
+              <div style={{fontSize:10,fontWeight:900,color:active?"#fff":"#ffffff88"}}>{fmt(p)}</div>
+              <div style={{fontSize:7,color:dc,marginTop:1}}>{d2}%</div>
             </button>
           );
         })}
       </div>
-      <div style={{marginBottom:14}}>
+
+      {/* Custom input */}
+      <div style={{position:"relative",marginBottom:10}}>
         <input value={custom} onChange={e=>handleCustom(e.target.value)}
-          style={{width:"100%",padding:"10px 14px",borderRadius:9,border:"1px solid #fbbf2433",
-            background:"#fbbf2408",color:"#fbbf24",fontSize:16,fontWeight:900,
-            fontFamily:G.font,outline:"none",textAlign:"center"}}
+          style={{width:"100%",padding:"11px 14px",borderRadius:9,
+            border:`2px solid ${blocked?"#f8717155":"#fbbf2433"}`,
+            background:blocked?"#f8717108":"#fbbf2408",
+            color:blocked?"#f87171":"#fbbf24",fontSize:16,fontWeight:900,
+            fontFamily:G.font,outline:"none",textAlign:"center",transition:"all .2s"}}
           placeholder="พิมพ์ราคาเอง…"/>
-        <div style={{fontSize:8,color:"#ffffff28",textAlign:"center",marginTop:4}}>ราคาที่ลงขาย: ฿{price.toLocaleString()}</div>
+        {blocked && (
+          <div style={{position:"absolute",right:10,top:"50%",transform:"translateY(-50%)",
+            fontSize:18}}>🚫</div>
+        )}
       </div>
-      <button onClick={()=>onList(price)} style={{
+
+      {/* Analysis panel */}
+      <div style={{background:tier.bg, border:`1px solid ${tier.c}30`,
+        borderRadius:10,padding:"12px 14px",marginBottom:14}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
+          <div style={{fontSize:11,fontWeight:700,color:tier.c}}>{tier.l}</div>
+          <div style={{textAlign:"right"}}>
+            {blocked
+              ? <div style={{fontSize:10,fontWeight:700,color:"#f87171"}}>cap: {fmt(MAX_PRICE)}</div>
+              : <>
+                  <div style={{fontSize:14,fontWeight:900,color:tier.c}}>{demandPct}%</div>
+                  <div style={{fontSize:8,color:"#ffffff44"}}>ต่อรอบ</div>
+                </>
+            }
+          </div>
+        </div>
+        {/* meter */}
+        <div style={{height:6,background:"#ffffff08",borderRadius:3,overflow:"hidden",marginBottom:8}}>
+          <div style={{height:"100%",borderRadius:3,
+            width:`${Math.min(demandPct,95)}%`,background:tier.c,
+            transition:"width 0.25s ease",
+            boxShadow:`0 0 8px ${tier.c}66`}}/>
+        </div>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+          <div style={{fontSize:8,color:"#ffffff44"}}>{tier.advice}</div>
+          <div style={{fontSize:9,fontWeight:700,color:tier.c,flexShrink:0,marginLeft:8}}>
+            {blocked ? "ลงขายไม่ได้" : `⏱ ${timeStr}`}
+          </div>
+        </div>
+        {/* price ratio hint */}
+        {!blocked && (
+          <div style={{marginTop:8,paddingTop:7,borderTop:"1px solid #ffffff08",
+            fontSize:8,color:"#ffffff33",display:"flex",gap:10}}>
+            <span>ราคาคุณ: {(ratio*100).toFixed(0)}% ของตลาด</span>
+            <span>cap: {fmt(MAX_PRICE)} (4×)</span>
+          </div>
+        )}
+      </div>
+
+      {/* Submit */}
+      <button onClick={()=>!blocked&&onList(price)} disabled={blocked} style={{
         width:"100%",padding:14,borderRadius:10,border:"none",
-        background:"linear-gradient(135deg,#78350f,#92400e)",color:"#fbbf24",
-        cursor:"pointer",fontSize:14,fontWeight:900,fontFamily:G.font,boxShadow:"0 4px 16px #78350f55",
-      }}>🏪 ลงขาย {item.emoji} ฿{price.toLocaleString()}</button>
+        background: blocked
+          ? "linear-gradient(135deg,#1f1f1f,#2a2a2a)"
+          : "linear-gradient(135deg,#78350f,#92400e)",
+        color: blocked ? "#ffffff33" : "#fbbf24",
+        cursor: blocked ? "not-allowed" : "pointer",
+        fontSize: blocked ? 12 : 14,
+        fontWeight:900,fontFamily:G.font,
+        boxShadow: blocked ? "none" : "0 4px 16px #78350f55",
+        transition:"all .2s",
+      }}>{blocked
+        ? `🚫 ราคาเกิน cap (max ${fmt(MAX_PRICE)})`
+        : `🏪 ลงขาย ${item.emoji} ฿${price.toLocaleString()} · คาดว่า ${timeStr}`
+      }</button>
     </Modal>
   );
 }
@@ -3450,6 +3574,12 @@ function GameScreen({ session, initPlayers, client, onEnd }) {
   const loanSpawnR = useRef(0); // countdown to next request spawn
   const loanIdR    = useRef(0);
 
+  // ── MARKET DEMAND (ตลาดซื้อของที่ listing อยู่) ──
+  const demandTickR = useRef(DEMAND_INTERVAL_MIN + Math.floor(Math.random()*(DEMAND_INTERVAL_MAX-DEMAND_INTERVAL_MIN)));
+
+  // ── ADMIN PRICE LOCK (ป้องกัน server TICK ทับหลัง admin สั่ง) ──
+  const priceAdminLockR = useRef(0); // timestamp (ms) ที่ lock จะหมด
+
   // ── MARKET FLASH (visual effect on crash events) ──
   const [mktFlash, setMktFlash] = useState(null); // "red" | null
   const [betSelectId,  setBetSelectId]  = useState(null);
@@ -3502,8 +3632,9 @@ function GameScreen({ session, initPlayers, client, onEnd }) {
     client.cb = (msg) => {
       origCb(msg); // ส่ง global messages ต่อ
       switch(msg.type) {
-        case "TICK":
-          if(msg.prices){
+        case "TICK": {
+          const adminLocked = Date.now() < priceAdminLockR.current;
+          if(msg.prices && !adminLocked){
             triggerFlash(msg.prices);
             priceR.current={...msg.prices}; setPrices({...msg.prices});
             Object.entries(msg.prices).forEach(([id,p])=>{
@@ -3512,11 +3643,11 @@ function GameScreen({ session, initPlayers, client, onEnd }) {
             });
             // Update ticker every 8 ticks
             if(!tickR.current) tickR.current=0; tickR.current++;
-            if(tickR.current%8===0){ tickerSnapR.current={prices:{...msg.prices},hists:{...histR.current}}; setTickerSnap({...tickerSnapR.current}); }
+            if(tickR.current%8===0){ tickerSnapR.current={prices:{...priceR.current},hists:{...histR.current}}; setTickerSnap({...tickerSnapR.current}); }
           }
           if(msg.timeLeft!==undefined) setTimeLeft(msg.timeLeft);
           if(msg.phase) setPhase(msg.phase);
-          if(msg.activeEvent!==undefined) {
+          if(msg.activeEvent!==undefined && !adminLocked) {
             const wasActive = !!evR.current;
             evR.current = msg.activeEvent || null;
             if(msg.activeEvent && !wasActive) {
@@ -3532,10 +3663,11 @@ function GameScreen({ session, initPlayers, client, onEnd }) {
               setActiveEv(msg.activeEvent || null);
             }
           }
-          if(msg.eventTimer!==undefined) setEvTimer(msg.eventTimer);
-          if(msg.hypeIdx) { hypeIdxR.current={...msg.hypeIdx}; setHypeIdx({...msg.hypeIdx}); }
+          if(msg.eventTimer!==undefined && !adminLocked) setEvTimer(msg.eventTimer);
+          if(msg.hypeIdx && !adminLocked) { hypeIdxR.current={...msg.hypeIdx}; setHypeIdx({...msg.hypeIdx}); }
           if(msg.board) setBoard(msg.board);
           break;
+        }
         case "TRADE_RESULT":
           if(msg.ok){
             applyServerCash(msg.cash);
@@ -3808,41 +3940,52 @@ function GameScreen({ session, initPlayers, client, onEnd }) {
     // split รองรับทั้งไทยและอักขระปกติ, ไม่ lowercase เพราะ asset ID ต้องการ uppercase
     const parts = cmd.trim().split(/\s+/);
     const c = parts[0];
+    const LOCK_DUR = 30000; // 30 วิ — ป้องกัน server TICK ทับ
+    const lockPrice = () => { priceAdminLockR.current = Date.now() + LOCK_DUR; };
     // ── ตลาด ──
     if (c === "ขึ้น") {
+      lockPrice();
       gameAssets.forEach(a=>{ priceR.current[a.id]=Math.round((priceR.current[a.id]||a.bp)*1.35); });
-      setPrices({...priceR.current}); showNotif("🔧 ตลาดขึ้น +35% ทุก asset","#4ade80");
+      setPrices({...priceR.current}); showNotif("🔧 ตลาดขึ้น +35% (lock 30วิ)","#4ade80");
     } else if (c === "ลง") {
+      lockPrice();
       gameAssets.forEach(a=>{ priceR.current[a.id]=Math.max(Math.round((priceR.current[a.id]||a.bp)*0.65),a.bp*0.1); });
-      setPrices({...priceR.current}); showNotif("🔧 ตลาดลง -35% ทุก asset","#f87171");
+      setPrices({...priceR.current}); showNotif("🔧 ตลาดลง -35% (lock 30วิ)","#f87171");
     } else if (c === "วิกฤต") {
+      lockPrice();
       gameAssets.filter(a=>a.type==="stock"||a.type==="crypto").forEach(a=>{ priceR.current[a.id]=Math.max(Math.round((priceR.current[a.id]||a.bp)*0.4),a.bp*0.05); });
-      setPrices({...priceR.current}); showNotif("🔧 วิกฤต! หุ้น+crypto ดิ่ง -60%","#f87171");
+      setPrices({...priceR.current}); showNotif("🔧 วิกฤต! หุ้น+crypto ดิ่ง -60% (lock 30วิ)","#f87171");
     } else if (c === "มูน") {
+      lockPrice();
       gameAssets.filter(a=>a.type==="crypto").forEach(a=>{ priceR.current[a.id]=Math.round((priceR.current[a.id]||a.bp)*3); });
-      setPrices({...priceR.current}); showNotif("🔧 Crypto ×3 🚀","#c084fc");
+      setPrices({...priceR.current}); showNotif("🔧 Crypto ×3 🚀 (lock 30วิ)","#c084fc");
     } else if (c === "ทอง") {
+      lockPrice();
       gameAssets.filter(a=>a.type==="gold").forEach(a=>{ priceR.current[a.id]=Math.round((priceR.current[a.id]||a.bp)*2); });
-      setPrices({...priceR.current}); showNotif("🔧 ทอง ×2 🥇","#f59e0b");
+      setPrices({...priceR.current}); showNotif("🔧 ทอง ×2 🥇 (lock 30วิ)","#f59e0b");
     // ── อีเวนต์ ──
     } else if (c === "อีเวนต์") {
+      lockPrice();
       const evId = parts[1];
       const ev = evId ? EVENTS.find(e=>e.id===evId) : EVENTS[Math.floor(Math.random()*EVENTS.length)];
       if (ev) {
         evR.current=ev; evTimerR.current=ev.dur;
         setActiveEv({...ev,_ts:Date.now()}); setEvTimer(ev.dur);
-        showNotif(`🔧 ${ev.title}`,"#fbbf24"); _snd.play('event');
+        showNotif(`🔧 ${ev.title} (lock 30วิ)`,"#fbbf24"); _snd.play('event');
       } else { showNotif(`❌ ไม่เจอ event id="${evId}" (ใช้: bull/crash/tech/war/elon/…)`,"#f87171"); }
     } else if (c === "หยุดอีเวนต์") {
+      lockPrice();
       evR.current=null; evTimerR.current=0; setActiveEv(null); setEvTimer(0);
-      showNotif("🔧 หยุด Event แล้ว","#ffffff44");
+      showNotif("🔧 หยุด Event แล้ว (lock 30วิ)","#ffffff44");
     // ── กระแส ──
     } else if (c === "ไฮปขึ้น") {
+      lockPrice();
       ['card','figure','gameid'].forEach(t=>{ hypeIdxR.current[t]=4.0; });
-      setHypeIdx({...hypeIdxR.current}); showNotif("🔧 Hype ×4 ทุกประเภท","#c084fc");
+      setHypeIdx({...hypeIdxR.current}); showNotif("🔧 Hype ×4 ทุกประเภท (lock 30วิ)","#c084fc");
     } else if (c === "ไฮปลง") {
+      lockPrice();
       ['card','figure','gameid'].forEach(t=>{ hypeIdxR.current[t]=0.2; });
-      setHypeIdx({...hypeIdxR.current}); showNotif("🔧 Hype ตก ×0.2","#f87171");
+      setHypeIdx({...hypeIdxR.current}); showNotif("🔧 Hype ตก ×0.2 (lock 30วิ)","#f87171");
     // ── เงิน ──
     } else if (c === "เงิน") {
       const amt = parseInt(parts[1])||10000;
@@ -3853,18 +3996,23 @@ function GameScreen({ session, initPlayers, client, onEnd }) {
       bankR.current = Math.floor(cfg.start * 0.5);
       syncCash(); syncBank();
       showNotif(`🔧 รีเซ็ตเงิน → ฿${cfg.start.toLocaleString()}`,"#ffffff44");
+    // ── ปลด lock ──
+    } else if (c === "ปลดล็อก") {
+      priceAdminLockR.current = 0;
+      showNotif("🔧 ปลด lock — server กลับมาควบคุมราคาแล้ว","#ffffff44");
     // ── ราคาเฉพาะตัว ──
     } else if (c === "ราคา" && parts[1] && parts[2]) {
+      lockPrice();
       const assetId = parts[1].toUpperCase();
       const val = parseInt(parts[2]);
       if (priceR.current[assetId] !== undefined && val > 0) {
         priceR.current[assetId] = val;
         setPrices({...priceR.current});
-        showNotif(`🔧 ${assetId} = ฿${val.toLocaleString()}`,"#38bdf8");
+        showNotif(`🔧 ${assetId} = ฿${val.toLocaleString()} (lock 30วิ)`,"#38bdf8");
       } else { showNotif(`❌ ไม่เจอ asset "${assetId}"`,"#f87171"); }
     // ── ช่วยเหลือ ──
     } else {
-      showNotif("🔧 คำสั่ง: ขึ้น / ลง / วิกฤต / มูน / ทอง / อีเวนต์ [id] / หยุดอีเวนต์ / ไฮปขึ้น / ไฮปลง / เงิน [จำนวน] / รีเซ็ต / ราคา [ASSET] [ราคา]","#ffffff44");
+      showNotif("🔧 คำสั่ง: ขึ้น / ลง / วิกฤต / มูน / ทอง / อีเวนต์ [id] / หยุดอีเวนต์ / ไฮปขึ้น / ไฮปลง / เงิน [จำนวน] / รีเซ็ต / ราคา [ASSET] [ราคา] / ปลดล็อก","#ffffff44");
     }
   };
 
@@ -4323,6 +4471,48 @@ function GameScreen({ session, initPlayers, client, onEnd }) {
           setLoans([...remaining]);
           loanHistoryR.current = newHistory.slice(0, 20);
           setLoanHistory([...loanHistoryR.current]);
+        }
+      }
+      // ── market demand: ตลาดสุ่มซื้อของที่ listing อยู่ ──
+      demandTickR.current--;
+      if (demandTickR.current <= 0) {
+        demandTickR.current = DEMAND_INTERVAL_MIN + Math.floor(Math.random()*(DEMAND_INTERVAL_MAX-DEMAND_INTERVAL_MIN));
+        const myListings = mktplaceR.current.filter(l=>l.sellerIsMe);
+        if (myListings.length > 0) {
+          const sold = [];
+          myListings.forEach(listing => {
+            const hypeIdx = hypeIdxR.current[listing.item.type] || 1;
+            const marketVal = listing.item.bp * hypeIdx;
+            const ratio = listing.price / Math.max(marketVal, 1);
+            // price multiplier: ถูกกว่าตลาด = โอกาสสูงขึ้น
+            const pMult = ratio <= 0.7 ? 2.2
+                        : ratio <= 0.85 ? 1.5
+                        : ratio <= 1.0  ? 1.0
+                        : ratio <= 1.3  ? 0.55
+                        : ratio <= 1.8  ? 0.2
+                        : 0.05;
+            const base = RARITY_DEMAND[listing.item.rarity] || 0.15;
+            const chance = Math.min(0.95, base * pMult * Math.min(hypeIdx, 2));
+            if (Math.random() < chance) sold.push(listing);
+          });
+          if (sold.length > 0) {
+            let totalGain = 0;
+            sold.forEach(listing => {
+              cashR.current += listing.price;
+              totalGain += listing.price;
+              hypeInvR.current = hypeInvR.current.filter(i => i.id !== listing.itemId);
+            });
+            syncCash();
+            setHypeInv([...hypeInvR.current]);
+            mktplaceR.current = mktplaceR.current.filter(l => !sold.some(s=>s.id===l.id));
+            setMktplace([...mktplaceR.current]);
+            _snd.play('win');
+            if (sold.length === 1) {
+              showNotif(`🛒 ตลาดซื้อ ${sold[0].item.emoji}${sold[0].item.name} +฿${sold[0].price.toLocaleString()}!`, "#fbbf24");
+            } else {
+              showNotif(`🛒 ตลาดซื้อ ${sold.length} ชิ้น! +฿${totalGain.toLocaleString()}`, "#fbbf24");
+            }
+          }
         }
       }
       boxTimerR.current--;
@@ -5485,12 +5675,24 @@ const myRank = allP.findIndex(p=>p.isMe)+1;
 
             {/* Marketplace */}
             <div>
-              <div style={{fontSize:9,letterSpacing:3,color:"#ffffff20",marginBottom:8}}>🏪 ห้องซื้อขาย ({mktplace.length} รายการ)</div>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
+                <div style={{fontSize:9,letterSpacing:3,color:"#ffffff20"}}>🏪 ห้องซื้อขาย ({mktplace.length} รายการ)</div>
+                <div style={{fontSize:7,color:"#fbbf2455",background:"#fbbf2408",padding:"2px 7px",borderRadius:5,border:"1px solid #fbbf2420"}}>🤖 ตลาดซื้ออัตโนมัติ</div>
+              </div>
               {mktplace.length===0 ? (
                 <div style={{textAlign:"center",padding:"20px",color:"#ffffff22",fontSize:11}}>ยังไม่มีรายการ<br/>ลองลงขายดูสิ!</div>
               ) : (
                 <div style={{display:"flex",flexDirection:"column",gap:5}}>
                   {mktplace.map(listing=>{
+                    // คำนวณ demand indicator
+                    const hIdx = hypeIdx[listing.item.type] || 1;
+                    const mktVal = listing.item.bp * hIdx;
+                    const ratio = listing.price / Math.max(mktVal,1);
+                    const base = RARITY_DEMAND[listing.item.rarity] || 0.15;
+                    const pMult = ratio<=0.7?2.2:ratio<=0.85?1.5:ratio<=1.0?1.0:ratio<=1.3?0.55:ratio<=1.8?0.2:0.05;
+                    const demandPct = Math.round(Math.min(0.95, base * pMult * Math.min(hIdx,2)) * 100);
+                    const demandLabel = demandPct>=60?"🔥 ร้อนมาก":demandPct>=35?"⚡ ดีมาก":demandPct>=18?"✅ พอได้":demandPct>=8?"🧊 ช้าหน่อย":"❄️ แพงไป";
+                    const demandColor = demandPct>=60?"#f59e0b":demandPct>=35?"#4ade80":demandPct>=18?"#38bdf8":demandPct>=8?"#94a3b8":"#f87171";
                     return (
                       <div key={listing.id} style={{
                         display:"flex",justifyContent:"space-between",alignItems:"center",
@@ -5503,14 +5705,23 @@ const myRank = allP.findIndex(p=>p.isMe)+1;
                             <span style={{fontSize:14,flexShrink:0}}>{listing.item.emoji}</span>
                             <span style={{fontSize:10,fontWeight:700,color:listing.item.rarityColor,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{listing.item.name}</span>
                           </div>
-                          <div style={{fontSize:8,color:"#ffffff33"}}>{listing.sellerIsMe?"👤 คุณ":listing.seller} · {listing.item.rarity}</div>
+                          <div style={{display:"flex",alignItems:"center",gap:6}}>
+                            <div style={{fontSize:8,color:"#ffffff33"}}>{listing.sellerIsMe?"👤 คุณ":listing.seller} · {listing.item.rarity}</div>
+                            {listing.sellerIsMe && (
+                              <div style={{fontSize:7,padding:"1px 5px",borderRadius:4,
+                                background:`${demandColor}18`,border:`1px solid ${demandColor}35`,
+                                color:demandColor,fontWeight:700,flexShrink:0}}>
+                                {demandLabel} {demandPct}%
+                              </div>
+                            )}
+                          </div>
                         </div>
                         <div style={{textAlign:"right",flexShrink:0,marginLeft:8}}>
                           <div style={{fontSize:13,fontWeight:900,color:"#e2e8f0"}}>฿{listing.price.toLocaleString()}</div>
                           {!listing.sellerIsMe ? (
                             <button onClick={()=>buyMarketItem(listing)} style={{marginTop:4,padding:"4px 8px",borderRadius:6,border:"1px solid #38bdf833",background:"#38bdf810",color:"#38bdf8",cursor:"pointer",fontSize:9,fontFamily:G.font,fontWeight:700}}>ซื้อ</button>
                           ) : (
-                            <div style={{fontSize:8,color:"#fbbf2466",marginTop:4}}>รอขาย…</div>
+                            <div style={{fontSize:8,color:"#fbbf2466",marginTop:3}}>รอตลาดซื้อ…</div>
                           )}
                         </div>
                       </div>
@@ -5711,7 +5922,7 @@ const myRank = allP.findIndex(p=>p.isMe)+1;
                 ["🪙 เหรียญทาย","฿300","฿600 (×2)","~48%"],
                 ["🎰 รูเล็ต (เลข)","฿150","฿5,250 (×35)","2.6%"],
               ]}/>
-              <Tip color="#f87171">Crash Game — Cash Out เร็วๆ ที่ ×1.5–×2.5 สม่ำเสมอดีกว่ารอ ×10 แล้วพลาด · house edge ~4%</Tip>
+              <Tip color="#f87171">Crash Game — ตัวเลขเร่งเร็วขึ้นเรื่อยๆ อย่ารอนาน! house edge ~8% — Cash Out ที่ ×1.4–×2.0 ยังดีกว่าเสี่ยง</Tip>
 
               <GH color="#fbbf24">🏇 Horse Race</GH>
               <div style={{background:"#ffffff05",borderRadius:10,padding:"12px 14px",border:"1px solid #ffffff0a",marginBottom:8}}>
@@ -5774,7 +5985,7 @@ const myRank = allP.findIndex(p=>p.isMe)+1;
 
       {/* MODALS */}
       {bankModal && <BankModal cash={cash} bank={bank} onDeposit={doDeposit} onWithdraw={doWithdraw} onClose={()=>setBankModal(false)}/>}
-      {listModal && <ListItemModal item={listModal} onList={(p)=>listItem(listModal,p)} onClose={()=>setListModal(null)}/>}
+      {listModal && <ListItemModal item={listModal} hypeIdx={hypeIdx} onList={(p)=>listItem(listModal,p)} onClose={()=>setListModal(null)}/>}
       {modal==="options" && selAsset && <OptionsModal asset={selAsset} price={selP} maxCash={bank} onBuy={doOption} onClose={()=>setModal(null)} hist={selHist}/>}
       {modal==="buy"   && selAsset && <BuyModal   asset={selAsset} price={selP} maxCash={bank} onBuy={doBuy} onClose={()=>setModal(null)} hist={selHist}/>}
       {modal==="sell"  && selAsset && <SellModal  asset={selAsset} price={selP} maxQty={selHave} onSell={doSell} onClose={()=>setModal(null)} hist={selHist}/>}
