@@ -219,13 +219,28 @@ const CAREERS = [
 
 // ── LENDING SYSTEM ──
 const LOAN_NPCS = [
-  { id:"ln1", name:"สมชาย", avatar:"👨‍🌾", risk:"low",  riskColor:"#4ade80", rate:0.04, maxLoan:5000,  defaultChance:0.03, repayRounds:5,  desc:"นักเกษตร มั่นคง จ่ายตรง" },
-  { id:"ln2", name:"มาลี",   avatar:"👩‍💼", risk:"low",  riskColor:"#4ade80", rate:0.05, maxLoan:8000,  defaultChance:0.04, repayRounds:4,  desc:"พนักงานออฟฟิศ เงินเดือนประจำ" },
-  { id:"ln3", name:"ธนา",    avatar:"🧔",   risk:"mid",  riskColor:"#fbbf24", rate:0.08, maxLoan:20000, defaultChance:0.09, repayRounds:6,  desc:"เถ้าแก่ร้านเล็ก รายได้ผันผวน" },
-  { id:"ln4", name:"ปลา",    avatar:"🧑‍🍳",  risk:"mid",  riskColor:"#fbbf24", rate:0.09, maxLoan:15000, defaultChance:0.11, repayRounds:5,  desc:"เชฟฟรีแลนซ์ งานไม่แน่นอน" },
-  { id:"ln5", name:"บิ๊ก",   avatar:"💼",   risk:"high", riskColor:"#f87171", rate:0.15, maxLoan:50000, defaultChance:0.20, repayRounds:8,  desc:"นักธุรกิจหน้าใหม่ ความเสี่ยงสูง" },
-  { id:"ln6", name:"เฮง",    avatar:"🎰",   risk:"high", riskColor:"#f87171", rate:0.18, maxLoan:80000, defaultChance:0.25, repayRounds:6,  desc:"นักพนัน ดอกสูง เบี้ยวบ่อย" },
+  // Low risk — จ่ายตรง ดอกน้อย
+  { id:"ln1",  name:"สมชาย", avatar:"👨‍🌾", risk:"low",  riskColor:"#4ade80", rate:0.04, askMin:1000,  askMax:4000,  defaultChance:0.02, repayRounds:4, desc:"นักเกษตร จ่ายตรงทุกงวด" },
+  { id:"ln2",  name:"มาลี",   avatar:"👩‍💼", risk:"low",  riskColor:"#4ade80", rate:0.05, askMin:2000,  askMax:6000,  defaultChance:0.03, repayRounds:5, desc:"พนักงานออฟฟิศ เงินเดือนประจำ" },
+  { id:"ln3",  name:"สุดา",   avatar:"👩‍🏫", risk:"low",  riskColor:"#4ade80", rate:0.04, askMin:1500,  askMax:5000,  defaultChance:0.02, repayRounds:4, desc:"ครูโรงเรียน รายได้ราชการ" },
+  { id:"ln4",  name:"วีรชัย", avatar:"👨‍🔬", risk:"low",  riskColor:"#4ade80", rate:0.05, askMin:3000,  askMax:8000,  defaultChance:0.03, repayRounds:5, desc:"นักวิจัย ฐานะมั่นคง" },
+  { id:"ln5",  name:"นภา",    avatar:"👩‍⚕️", risk:"low",  riskColor:"#4ade80", rate:0.04, askMin:2000,  askMax:7000,  defaultChance:0.02, repayRounds:4, desc:"พยาบาล เงินเดือนประจำ" },
+  { id:"ln6",  name:"อรุณ",   avatar:"👴",   risk:"low",  riskColor:"#4ade80", rate:0.04, askMin:1000,  askMax:3000,  defaultChance:0.02, repayRounds:3, desc:"ข้าราชการเกษียณ มีบำนาญ" },
+  // Mid risk — รายได้ผันผวน
+  { id:"ln7",  name:"ธนา",    avatar:"🧔",   risk:"mid",  riskColor:"#fbbf24", rate:0.08, askMin:5000,  askMax:18000, defaultChance:0.09, repayRounds:6, desc:"เถ้าแก่ร้านเล็ก รายได้ผันผวน" },
+  { id:"ln8",  name:"ปลา",    avatar:"🧑‍🍳",  risk:"mid",  riskColor:"#fbbf24", rate:0.09, askMin:3000,  askMax:12000, defaultChance:0.10, repayRounds:5, desc:"เชฟฟรีแลนซ์ งานไม่แน่นอน" },
+  { id:"ln9",  name:"ต้น",    avatar:"🧑‍🎨",  risk:"mid",  riskColor:"#fbbf24", rate:0.09, askMin:4000,  askMax:15000, defaultChance:0.11, repayRounds:5, desc:"กราฟิกดีไซน์เนอร์ ฟรีแลนซ์" },
+  { id:"ln10", name:"จิ๊บ",   avatar:"👩‍🎤",  risk:"mid",  riskColor:"#fbbf24", rate:0.10, askMin:5000,  askMax:20000, defaultChance:0.12, repayRounds:6, desc:"นักร้องอิสระ รายได้ไม่สม่ำเสมอ" },
+  { id:"ln11", name:"เอก",    avatar:"👨‍🏭",  risk:"mid",  riskColor:"#fbbf24", rate:0.08, askMin:8000,  askMax:22000, defaultChance:0.09, repayRounds:7, desc:"คนงานโรงงาน รายได้ปานกลาง" },
+  { id:"ln12", name:"แนน",    avatar:"👩‍💻",  risk:"mid",  riskColor:"#fbbf24", rate:0.09, askMin:3000,  askMax:14000, defaultChance:0.10, repayRounds:5, desc:"ค้าขายออนไลน์ ยอดขายผันผวน" },
+  // High risk — ดอกสูง เสี่ยงเบี้ยว
+  { id:"ln13", name:"บิ๊ก",   avatar:"💼",   risk:"high", riskColor:"#f87171", rate:0.15, askMin:10000, askMax:40000, defaultChance:0.20, repayRounds:8, desc:"นักธุรกิจหน้าใหม่ burn rate สูง" },
+  { id:"ln14", name:"เฮง",    avatar:"🎰",   risk:"high", riskColor:"#f87171", rate:0.18, askMin:15000, askMax:60000, defaultChance:0.25, repayRounds:6, desc:"นักพนัน ดอกสูง เบี้ยวบ่อย" },
+  { id:"ln15", name:"โจ",     avatar:"🕶️",   risk:"high", riskColor:"#f87171", rate:0.20, askMin:12000, askMax:50000, defaultChance:0.28, repayRounds:7, desc:"นักลงทุนเสี่ยงสูง อยากรวยเร็ว" },
+  { id:"ln16", name:"ต้าน",   avatar:"🧑‍💻",  risk:"high", riskColor:"#f87171", rate:0.16, askMin:8000,  askMax:35000, defaultChance:0.22, repayRounds:6, desc:"สตาร์ทอัพ runway เหลือน้อย" },
+  { id:"ln17", name:"กวาง",   avatar:"🎪",   risk:"high", riskColor:"#f87171", rate:0.17, askMin:10000, askMax:45000, defaultChance:0.23, repayRounds:7, desc:"โปรโมเตอร์ บางทีหายตัว" },
 ];
+const LENDING_UNLOCK_COST = 5000;
 
 const BOT_CHAT_POOL = [
   "ซื้อแล้ว รอขึ้น 📈","กราฟน่าสนใจมาก","HODL เดี๋ยวก็กลับ","ขาย 50% ก่อนดีกว่า",
@@ -3331,58 +3346,6 @@ function GachaOpenModal({ item, boxType, onClose }) {
   );
 }
 
-function LoanNpcCard({ npc, cash, onLend }) {
-  const [lendAmt, setLendAmt] = useState(Math.round(npc.maxLoan*0.5));
-  const riskLabel = {low:"ต่ำ",mid:"กลาง",high:"สูง"}[npc.risk];
-  const totalReturn = Math.round(lendAmt * npc.rate * npc.repayRounds);
-  return (
-    <div style={{background:G.panel,borderRadius:13,padding:"12px 14px",
-      border:`1px solid ${npc.riskColor}22`,boxShadow:`0 2px 12px ${npc.riskColor}08`}}>
-      <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:10}}>
-        <div style={{display:"flex",alignItems:"center",gap:8}}>
-          <span style={{fontSize:22}}>{npc.avatar}</span>
-          <div>
-            <div style={{fontWeight:700,fontSize:13,color:"#e2e8f0"}}>{npc.name}</div>
-            <div style={{fontSize:8,color:"#ffffff44"}}>{npc.desc}</div>
-          </div>
-        </div>
-        <div style={{fontSize:8,padding:"2px 8px",borderRadius:6,
-          background:`${npc.riskColor}18`,border:`1px solid ${npc.riskColor}40`,
-          color:npc.riskColor,fontWeight:700}}>ความเสี่ยง {riskLabel}</div>
-      </div>
-      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:6,marginBottom:10}}>
-        {[
-          {l:"ดอกเบี้ย",v:`${(npc.rate*100).toFixed(0)}%/30วิ`,c:"#4ade80"},
-          {l:"งวดชำระ",v:`${npc.repayRounds} งวด`,c:"#38bdf8"},
-          {l:"รวมดอก",v:`+${fmt(totalReturn)}`,c:"#fbbf24"},
-        ].map(({l,v,c})=>(
-          <div key={l} style={{background:"#ffffff06",borderRadius:8,padding:"6px 8px"}}>
-            <div style={{fontSize:7,color:"#ffffff33",marginBottom:2}}>{l}</div>
-            <div style={{fontSize:11,fontWeight:700,color:c}}>{v}</div>
-          </div>
-        ))}
-      </div>
-      <div style={{marginBottom:8}}>
-        <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}>
-          <span style={{fontSize:9,color:"#ffffff44"}}>จำนวนที่ให้กู้</span>
-          <span style={{fontSize:9,color:"#38bdf8",fontWeight:700}}>{fmt(lendAmt)}</span>
-        </div>
-        <input type="range" min={Math.round(npc.maxLoan*0.1)} max={npc.maxLoan} step={100}
-          value={lendAmt} onChange={e=>setLendAmt(+e.target.value)}
-          style={{width:"100%",accentColor:npc.riskColor}}/>
-        <div style={{display:"flex",justifyContent:"space-between",fontSize:8,color:"#ffffff22",marginTop:2}}>
-          <span>{fmt(Math.round(npc.maxLoan*0.1))}</span><span>{fmt(npc.maxLoan)}</span>
-        </div>
-      </div>
-      <button onClick={()=>onLend(npc,lendAmt)} disabled={cash<lendAmt} style={{
-        width:"100%",padding:"9px 0",borderRadius:9,cursor:"pointer",fontFamily:G.font,
-        border:`1px solid ${npc.riskColor}50`,background:`${npc.riskColor}18`,
-        color:npc.riskColor,fontSize:11,fontWeight:700,
-        opacity: cash<lendAmt ? 0.45 : 1,
-      }}>💳 ให้กู้ {fmt(lendAmt)} → รับ {fmt(totalReturn)} ดอก</button>
-    </div>
-  );
-}
 
 // ── GAME SCREEN ──
 function GameScreen({ session, initPlayers, client, onEnd }) {
@@ -3475,9 +3438,16 @@ function GameScreen({ session, initPlayers, client, onEnd }) {
   const activeBetR = useRef(0);
 
   // ── LENDING SYSTEM ──
-  const loansR     = useRef([]);
+  const lendingUnlockedR = useRef(false);
+  const [lendingUnlocked, setLendingUnlocked] = useState(false);
+  const loansR           = useRef([]);
   const [loans,    setLoans]    = useState([]);
+  const loanRequestsR    = useRef([]); // [{id,npcId,amount,ttl}] — pending NPC requests
+  const [loanRequests, setLoanRequests] = useState([]);
+  const loanHistoryR     = useRef([]); // [{npcId,name,avatar,amount,status:"paid"|"defaulted",at}]
+  const [loanHistory,  setLoanHistory]  = useState([]);
   const loanTickR  = useRef(0);
+  const loanSpawnR = useRef(0); // countdown to next request spawn
   const loanIdR    = useRef(0);
 
   // ── MARKET FLASH (visual effect on crash events) ──
@@ -3730,16 +3700,38 @@ function GameScreen({ session, initPlayers, client, onEnd }) {
   const syncBasis = () => setBasis({...basisR.current});
   const syncShort = () => setShort({...shortR.current});
 
-  const doLend = (npc, amount) => {
-    if (cashR.current < amount) { showNotif("❌ เงินสดไม่พอ","#f87171"); return; }
-    if (loansR.current.some(l=>l.npcId===npc.id)) { showNotif("❌ ให้กู้รายนี้อยู่แล้ว","#f87171"); return; }
-    cashR.current -= amount; syncCash();
-    const loan = { id: `loan${++loanIdR.current}`, npcId:npc.id, amount, rate:npc.rate, round:0, totalRounds:npc.repayRounds };
+  const doUnlockLending = () => {
+    if (cashR.current < LENDING_UNLOCK_COST) { showNotif("❌ เงินสดไม่พอ","#f87171"); return; }
+    cashR.current -= LENDING_UNLOCK_COST; syncCash();
+    lendingUnlockedR.current = true;
+    setLendingUnlocked(true);
+    loanSpawnR.current = 5; // spawn first request in 5s
+    _snd.play('buy');
+    showNotif("💳 เปิดธุรกิจปล่อยกู้แล้ว! รอลูกค้ามาขอกู้เลย", "#38bdf8");
+  };
+
+  const doAcceptLoan = (reqId) => {
+    const req = loanRequestsR.current.find(r=>r.id===reqId);
+    if (!req) return;
+    const npc = LOAN_NPCS.find(n=>n.id===req.npcId);
+    if (!npc) return;
+    if (cashR.current < req.amount) { showNotif("❌ เงินสดไม่พอ","#f87171"); return; }
+    cashR.current -= req.amount; syncCash();
+    const loan = { id:`loan${++loanIdR.current}`, npcId:npc.id, amount:req.amount, round:0, totalRounds:npc.repayRounds };
     loansR.current = [...loansR.current, loan];
     setLoans([...loansR.current]);
+    loanRequestsR.current = loanRequestsR.current.filter(r=>r.id!==reqId);
+    setLoanRequests([...loanRequestsR.current]);
     _snd.play('buy');
-    showNotif(`💳 ให้กู้ ${npc.name} ฿${amount.toLocaleString()} · ดอก ${(npc.rate*100).toFixed(0)}%/30วิ`, "#38bdf8");
+    showNotif(`💳 ให้กู้ ${npc.name} ฿${req.amount.toLocaleString()} · ดอก ${(npc.rate*100).toFixed(0)}%/30วิ`, "#38bdf8");
   };
+
+  const doDeclineLoan = (reqId) => {
+    loanRequestsR.current = loanRequestsR.current.filter(r=>r.id!==reqId);
+    setLoanRequests([...loanRequestsR.current]);
+    _snd.play('beep');
+  };
+
   const myNW = () => {
     const holdVal = Object.entries(holdR.current).reduce((s,[id,q])=>s+(priceR.current[id]||0)*q, 0);
     const shortObl = Object.entries(shortR.current).reduce((s,[id,pos])=>s+(priceR.current[id]||0)*pos.qty, 0);
@@ -4256,38 +4248,82 @@ function GameScreen({ session, initPlayers, client, onEnd }) {
     const id = setInterval(() => {
       // career cooldown
       if (careerCDR.current > 0) { careerCDR.current--; setCareerCD(careerCDR.current); }
-      // lending tick — process every 30s
-      loanTickR.current++;
-      if (loanTickR.current % 30 === 0 && loansR.current.length > 0) {
-        let changed = false;
-        const remaining = [];
-        loansR.current.forEach(loan => {
-          const npc = LOAN_NPCS.find(n => n.id === loan.npcId);
-          if (!npc) return;
-          if (Math.random() < npc.defaultChance) {
-            showNotif(`💀 ${npc.name} เบี้ยวหนี! เสีย ฿${loan.amount.toLocaleString()}`, "#f87171");
-            _snd.play('bust');
-            changed = true;
+      // ── lending system ──
+      if (lendingUnlockedR.current) {
+        loanTickR.current++;
+
+        // 1) countdown & expire pending requests (every tick)
+        if (loanRequestsR.current.length > 0) {
+          const stillPending = loanRequestsR.current
+            .map(r => ({...r, ttl: r.ttl - 1}))
+            .filter(r => r.ttl > 0);
+          if (stillPending.length !== loanRequestsR.current.length) {
+            loanRequestsR.current = stillPending;
+            setLoanRequests([...stillPending]);
           } else {
-            const interest = Math.round(loan.amount * npc.rate);
-            cashR.current += interest;
-            syncCash();
-            const newRound = loan.round + 1;
-            if (newRound >= loan.totalRounds) {
-              cashR.current += loan.amount;
-              syncCash();
-              _snd.play('jackpot');
-              showNotif(`✅ ${npc.name} คืนต้นทุน! +฿${loan.amount.toLocaleString()} (ดอก +฿${interest.toLocaleString()})`, "#4ade80");
-              changed = true;
-            } else {
-              _snd.play('income');
-              showNotif(`💰 ดอกเบี้ยจาก ${npc.name}: +฿${interest.toLocaleString()} (งวด ${newRound}/${loan.totalRounds})`, "#4ade80");
-              remaining.push({...loan, round: newRound});
-              changed = true;
+            // just update ttl display
+            loanRequestsR.current = stillPending;
+            setLoanRequests([...stillPending]);
+          }
+        }
+
+        // 2) spawn new request — random interval 20-40s, max 3 pending at once
+        loanSpawnR.current--;
+        if (loanSpawnR.current <= 0) {
+          loanSpawnR.current = 20 + Math.floor(Math.random()*21); // 20-40s
+          if (loanRequestsR.current.length < 3) {
+            const busyIds = new Set([
+              ...loansR.current.map(l=>l.npcId),
+              ...loanRequestsR.current.map(r=>r.npcId),
+            ]);
+            const available = LOAN_NPCS.filter(n => !busyIds.has(n.id));
+            if (available.length > 0) {
+              const npc = available[Math.floor(Math.random()*available.length)];
+              const askAmt = Math.round(
+                (npc.askMin + Math.random()*(npc.askMax - npc.askMin)) / 500
+              ) * 500;
+              const req = { id:`req${++loanIdR.current}`, npcId:npc.id, amount:askAmt, ttl:60 };
+              loanRequestsR.current = [...loanRequestsR.current, req];
+              setLoanRequests([...loanRequestsR.current]);
+              _snd.play('beep');
             }
           }
-        });
-        if (changed) { loansR.current = remaining; setLoans([...remaining]); }
+        }
+
+        // 3) process active loans every 30s
+        if (loanTickR.current % 30 === 0 && loansR.current.length > 0) {
+          const remaining = [];
+          const newHistory = [...loanHistoryR.current];
+          loansR.current.forEach(loan => {
+            const npc = LOAN_NPCS.find(n => n.id === loan.npcId);
+            if (!npc) return;
+            if (Math.random() < npc.defaultChance) {
+              _snd.play('bust');
+              showNotif(`💀 ${npc.name} เบี้ยวหนี! เสีย ฿${loan.amount.toLocaleString()}`, "#f87171");
+              newHistory.unshift({npcId:npc.id, name:npc.name, avatar:npc.avatar, riskColor:npc.riskColor, amount:loan.amount, status:"defaulted", at:Date.now()});
+            } else {
+              const interest = Math.round(loan.amount * npc.rate);
+              cashR.current += interest;
+              syncCash();
+              const newRound = loan.round + 1;
+              if (newRound >= loan.totalRounds) {
+                cashR.current += loan.amount;
+                syncCash();
+                _snd.play('jackpot');
+                showNotif(`✅ ${npc.name} คืนต้นพร้อมดอก! +฿${(loan.amount+interest).toLocaleString()}`, "#4ade80");
+                newHistory.unshift({npcId:npc.id, name:npc.name, avatar:npc.avatar, riskColor:npc.riskColor, amount:loan.amount, status:"paid", at:Date.now()});
+              } else {
+                _snd.play('income');
+                showNotif(`💰 ดอกจาก ${npc.name}: +฿${interest.toLocaleString()} (${newRound}/${loan.totalRounds})`, "#4ade80");
+                remaining.push({...loan, round:newRound});
+              }
+            }
+          });
+          loansR.current = remaining;
+          setLoans([...remaining]);
+          loanHistoryR.current = newHistory.slice(0, 20);
+          setLoanHistory([...loanHistoryR.current]);
+        }
       }
       boxTimerR.current--;
         setBoxTimer(boxTimerR.current);
@@ -4703,7 +4739,7 @@ const myRank = allP.findIndex(p=>p.isMe)+1;
           {k:"career",    l:`🧑‍💼 อาชีพ${career?" ✦":""}`},
           {k:"hype",      l:"🎴 กระแส"},
           {k:"gamble",    l:"🎲 Gamble"},
-          {k:"lending",   l:`💳 กู้${loans.length>0?` ·${loans.length}`:""}`},
+          {k:"lending",   l:`💳 กู้${loanRequests.length>0?` 🔴${loanRequests.length}`:loans.length>0?` ·${loans.length}`:""}`},
           {k:"rank",      l:"🏆 Rank"},
           {k:"history",   l:`📋 ประวัติ${tradeHistory.length>0?` ${tradeHistory.length}`:""}`},
           {k:"chat",      l:`💬 แชท${chatMsgs.length>0?" ·":""}`},
@@ -5068,66 +5104,197 @@ const myRank = allP.findIndex(p=>p.isMe)+1;
         {/* LENDING TAB */}
         {tab==="lending" && (
           <div>
-            {/* Stats Header */}
-            <div style={{background:"#38bdf808",border:"1px solid #38bdf820",borderRadius:12,padding:"12px 14px",marginBottom:14}}>
-              <div style={{fontSize:10,color:"#38bdf8aa",marginBottom:6,fontWeight:700}}>💳 ระบบปล่อยกู้ — รับดอกเบี้ยทุก 30 วิ</div>
-              <div style={{display:"flex",justifyContent:"space-between",fontSize:9,color:"#ffffff44"}}>
-                <span>เงินกู้คงค้าง: <span style={{color:"#38bdf8"}}>{loans.length} รายการ</span></span>
-                <span>เงินค้างจ่าย: <span style={{color:"#fbbf24"}}>{fmt(loans.reduce((s,l)=>s+l.amount,0))}</span></span>
+          {!lendingUnlocked ? (
+            /* ── LOCK SCREEN ── */
+            <div style={{textAlign:"center",padding:"32px 16px"}}>
+              <div style={{fontSize:48,marginBottom:12}}>💳</div>
+              <div style={{fontSize:16,fontWeight:900,color:"#38bdf8",marginBottom:8}}>ธุรกิจปล่อยกู้</div>
+              <div style={{fontSize:10,color:"#ffffff44",lineHeight:1.7,marginBottom:24}}>
+                รับดอกเบี้ยจากลูกค้าที่มาขอกู้<br/>
+                NPC สุ่มมาขอ · ตอบรับหรือปฏิเสธก็ได้<br/>
+                ⚠️ มีความเสี่ยงเบี้ยว ไม่มีประกันเงินต้น
               </div>
-              <div style={{fontSize:8,color:"#ffffff22",marginTop:6,lineHeight:1.6}}>
-                ⚠️ ผู้กู้อาจเบี้ยวได้ตามระดับความเสี่ยง · เงินต้นไม่มีประกัน
+              <div style={{background:"#38bdf808",border:"1px solid #38bdf830",borderRadius:12,padding:"12px 16px",marginBottom:20,display:"inline-block"}}>
+                <div style={{fontSize:9,color:"#ffffff33",marginBottom:4}}>ค่าลงทะเบียน (จ่ายครั้งเดียว)</div>
+                <div style={{fontSize:24,fontWeight:900,color:"#38bdf8"}}>฿{LENDING_UNLOCK_COST.toLocaleString()}</div>
               </div>
+              <br/>
+              <button onClick={doUnlockLending} disabled={cash<LENDING_UNLOCK_COST} style={{
+                padding:"12px 32px",borderRadius:12,cursor:"pointer",fontFamily:G.font,
+                border:"1px solid #38bdf850",background:"linear-gradient(135deg,#0e3a5f,#0e2a4f)",
+                color:"#38bdf8",fontSize:13,fontWeight:900,
+                opacity:cash<LENDING_UNLOCK_COST?0.45:1,
+                boxShadow:"0 4px 20px #38bdf820",
+              }}>💳 เปิดธุรกิจปล่อยกู้</button>
+              {cash<LENDING_UNLOCK_COST && (
+                <div style={{fontSize:9,color:"#f8717177",marginTop:10}}>เงินสดไม่พอ (ต้องการ {fmt(LENDING_UNLOCK_COST)})</div>
+              )}
             </div>
+          ) : (
+            <>
+              {/* Stats bar */}
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:6,marginBottom:14}}>
+                {[
+                  {l:"กู้อยู่", v:loans.length+" ราย", c:"#38bdf8"},
+                  {l:"เงินค้างจ่าย", v:fmt(loans.reduce((s,l)=>s+l.amount,0)), c:"#fbbf24"},
+                  {l:"จ่ายแล้ว/เบี้ยว", v:`${loanHistory.filter(h=>h.status==="paid").length}✓ ${loanHistory.filter(h=>h.status==="defaulted").length}✗`, c:"#4ade80"},
+                ].map(({l,v,c})=>(
+                  <div key={l} style={{background:G.panel,borderRadius:10,padding:"8px 10px",border:`1px solid ${c}18`}}>
+                    <div style={{fontSize:7,color:"#ffffff33",marginBottom:3}}>{l}</div>
+                    <div style={{fontSize:11,fontWeight:700,color:c}}>{v}</div>
+                  </div>
+                ))}
+              </div>
 
-            {/* Available Borrowers */}
-            <div style={{fontSize:9,letterSpacing:3,color:"#ffffff20",marginBottom:10}}>ผู้กู้ที่พร้อม</div>
-            <div style={{display:"flex",flexDirection:"column",gap:8,marginBottom:18}}>
-              {LOAN_NPCS.filter(n=>!loans.some(l=>l.npcId===n.id)).map(npc=>(
-                <LoanNpcCard key={npc.id} npc={npc} cash={cash} onLend={doLend}/>
-              ))}
-            </div>
-
-            {/* Active Loans */}
-            {loans.length > 0 && (
-              <>
-                <div style={{fontSize:9,letterSpacing:3,color:"#ffffff20",marginBottom:10}}>เงินกู้ที่ค้างอยู่</div>
-                <div style={{display:"flex",flexDirection:"column",gap:8}}>
-                  {loans.map(loan=>{
-                    const npc = LOAN_NPCS.find(n=>n.id===loan.npcId);
-                    if (!npc) return null;
-                    const progress = loan.round / loan.totalRounds;
-                    const nextInterest = Math.round(loan.amount * npc.rate);
-                    return (
-                      <div key={loan.id} style={{background:G.panel,borderRadius:12,padding:"11px 13px",
-                        border:`1px solid ${npc.riskColor}30`}}>
-                        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
-                          <div style={{display:"flex",alignItems:"center",gap:6}}>
-                            <span style={{fontSize:18}}>{npc.avatar}</span>
-                            <div>
-                              <div style={{fontSize:12,fontWeight:700,color:"#e2e8f0"}}>{npc.name}</div>
-                              <div style={{fontSize:8,color:"#ffffff33"}}>เงินต้น {fmt(loan.amount)}</div>
+              {/* ── Pending Requests ── */}
+              {loanRequests.length > 0 && (
+                <>
+                  <div style={{fontSize:9,letterSpacing:3,color:"#ffffff20",marginBottom:8}}>📨 คำขอกู้ใหม่</div>
+                  <div style={{display:"flex",flexDirection:"column",gap:8,marginBottom:16}}>
+                    {loanRequests.map(req=>{
+                      const npc = LOAN_NPCS.find(n=>n.id===req.npcId);
+                      if (!npc) return null;
+                      const interest = Math.round(req.amount * npc.rate);
+                      const totalInt = interest * npc.repayRounds;
+                      const urgent = req.ttl <= 15;
+                      return (
+                        <div key={req.id} style={{background:G.panel,borderRadius:13,padding:"12px 14px",
+                          border:`2px solid ${urgent?"#f87171":"#38bdf8"}44`,
+                          boxShadow:`0 0 18px ${urgent?"#f87171":"#38bdf8"}18`,
+                          animation:"event-banner-in 0.3s ease",
+                        }}>
+                          <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:10}}>
+                            <div style={{display:"flex",alignItems:"center",gap:8}}>
+                              <span style={{fontSize:24}}>{npc.avatar}</span>
+                              <div>
+                                <div style={{fontWeight:700,fontSize:13,color:"#e2e8f0"}}>{npc.name}</div>
+                                <div style={{fontSize:8,color:"#ffffff44"}}>{npc.desc}</div>
+                              </div>
+                            </div>
+                            <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:3}}>
+                              <div style={{fontSize:8,padding:"2px 8px",borderRadius:6,
+                                background:`${npc.riskColor}18`,border:`1px solid ${npc.riskColor}40`,
+                                color:npc.riskColor,fontWeight:700}}>ความเสี่ยง {{low:"ต่ำ",mid:"กลาง",high:"สูง"}[npc.risk]}</div>
+                              <div style={{fontSize:10,fontWeight:700,color:urgent?"#f87171":"#fbbf24",
+                                animation:urgent?"glow-pulse 0.8s infinite":undefined}}>⏰ {req.ttl}s</div>
                             </div>
                           </div>
-                          <div style={{textAlign:"right"}}>
-                            <div style={{fontSize:10,color:"#4ade80",fontWeight:700}}>+{fmt(nextInterest)}/งวด</div>
-                            <div style={{fontSize:8,color:"#ffffff33"}}>{loan.round}/{loan.totalRounds} งวด</div>
+                          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:6,marginBottom:10}}>
+                            <div style={{background:"#ffffff06",borderRadius:8,padding:"6px 8px"}}>
+                              <div style={{fontSize:7,color:"#ffffff33",marginBottom:1}}>ขอกู้</div>
+                              <div style={{fontSize:12,fontWeight:700,color:"#e2e8f0"}}>{fmt(req.amount)}</div>
+                            </div>
+                            <div style={{background:"#ffffff06",borderRadius:8,padding:"6px 8px"}}>
+                              <div style={{fontSize:7,color:"#ffffff33",marginBottom:1}}>ดอก/งวด</div>
+                              <div style={{fontSize:12,fontWeight:700,color:"#4ade80"}}>{fmt(interest)}</div>
+                            </div>
+                            <div style={{background:"#ffffff06",borderRadius:8,padding:"6px 8px"}}>
+                              <div style={{fontSize:7,color:"#ffffff33",marginBottom:1}}>รวม{npc.repayRounds}งวด</div>
+                              <div style={{fontSize:12,fontWeight:700,color:"#fbbf24"}}>+{fmt(totalInt)}</div>
+                            </div>
+                          </div>
+                          {/* countdown bar */}
+                          <div style={{height:3,background:"#ffffff08",borderRadius:2,overflow:"hidden",marginBottom:10}}>
+                            <div style={{height:"100%",borderRadius:2,
+                              width:`${(req.ttl/60)*100}%`,
+                              background:urgent?"#f87171":"#38bdf8",
+                              transition:"width 1s linear"}}/>
+                          </div>
+                          <div style={{display:"flex",gap:8}}>
+                            <button onClick={()=>doDeclineLoan(req.id)} style={{
+                              flex:1,padding:"8px 0",borderRadius:9,cursor:"pointer",fontFamily:G.font,
+                              border:"1px solid #f8717140",background:"#f8717110",
+                              color:"#f87171",fontSize:11,fontWeight:700,
+                            }}>✕ ปฏิเสธ</button>
+                            <button onClick={()=>doAcceptLoan(req.id)} disabled={cash<req.amount} style={{
+                              flex:2,padding:"8px 0",borderRadius:9,cursor:"pointer",fontFamily:G.font,
+                              border:"1px solid #38bdf850",background:"linear-gradient(135deg,#0e3a5f88,#0e2a4f88)",
+                              color:"#38bdf8",fontSize:11,fontWeight:700,
+                              opacity:cash<req.amount?0.45:1,
+                            }}>✓ ปล่อยกู้ {fmt(req.amount)}</button>
                           </div>
                         </div>
-                        <div style={{height:4,background:"#ffffff08",borderRadius:2,overflow:"hidden"}}>
-                          <div style={{height:"100%",width:`${progress*100}%`,background:npc.riskColor,
-                            transition:"width 0.5s ease",borderRadius:2}}/>
-                        </div>
-                      </div>
-                    );
-                  })}
+                      );
+                    })}
+                  </div>
+                </>
+              )}
+              {loanRequests.length === 0 && loans.length === 0 && (
+                <div style={{textAlign:"center",color:"#ffffff22",fontSize:9,padding:"20px 0",marginBottom:14}}>
+                  ⏳ รอลูกค้ามาขอกู้... (ทุก 20-40 วิ)
                 </div>
-              </>
-            )}
+              )}
 
-            {LOAN_NPCS.filter(n=>!loans.some(l=>l.npcId===n.id)).length===0 && loans.length===LOAN_NPCS.length && (
-              <div style={{textAlign:"center",color:"#ffffff22",fontSize:10,padding:20}}>ให้กู้ครบทุกรายแล้ว — รอดอกเบี้ยทุก 30 วิ</div>
-            )}
+              {/* ── Active Loans ── */}
+              {loans.length > 0 && (
+                <>
+                  <div style={{fontSize:9,letterSpacing:3,color:"#ffffff20",marginBottom:8}}>📋 กู้ที่ค้างอยู่</div>
+                  <div style={{display:"flex",flexDirection:"column",gap:7,marginBottom:16}}>
+                    {loans.map(loan=>{
+                      const npc = LOAN_NPCS.find(n=>n.id===loan.npcId);
+                      if (!npc) return null;
+                      const interest = Math.round(loan.amount * npc.rate);
+                      const progress = loan.round / loan.totalRounds;
+                      return (
+                        <div key={loan.id} style={{background:G.panel,borderRadius:12,padding:"10px 13px",
+                          border:`1px solid ${npc.riskColor}28`}}>
+                          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:7}}>
+                            <div style={{display:"flex",alignItems:"center",gap:7}}>
+                              <span style={{fontSize:20}}>{npc.avatar}</span>
+                              <div>
+                                <div style={{fontSize:12,fontWeight:700,color:"#e2e8f0"}}>{npc.name}</div>
+                                <div style={{fontSize:8,color:"#ffffff33"}}>ต้นทุน {fmt(loan.amount)}</div>
+                              </div>
+                            </div>
+                            <div style={{textAlign:"right"}}>
+                              <div style={{fontSize:11,color:"#4ade80",fontWeight:700}}>+{fmt(interest)}/งวด</div>
+                              <div style={{fontSize:8,color:"#ffffff44"}}>{loan.round}/{loan.totalRounds} งวด</div>
+                            </div>
+                          </div>
+                          <div style={{display:"flex",alignItems:"center",gap:6}}>
+                            <div style={{flex:1,height:5,background:"#ffffff08",borderRadius:3,overflow:"hidden"}}>
+                              <div style={{height:"100%",width:`${progress*100}%`,borderRadius:3,
+                                background:`linear-gradient(90deg,${npc.riskColor}aa,${npc.riskColor})`,
+                                transition:"width 0.5s ease"}}/>
+                            </div>
+                            <div style={{fontSize:8,color:"#ffffff33",flexShrink:0}}>{Math.round(progress*100)}%</div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </>
+              )}
+
+              {/* ── History ── */}
+              {loanHistory.length > 0 && (
+                <>
+                  <div style={{fontSize:9,letterSpacing:3,color:"#ffffff20",marginBottom:8}}>📜 ประวัติ</div>
+                  <div style={{display:"flex",flexDirection:"column",gap:5}}>
+                    {loanHistory.slice(0,10).map((h,i)=>{
+                      const paid = h.status==="paid";
+                      return (
+                        <div key={i} style={{display:"flex",alignItems:"center",gap:8,
+                          background:paid?"#4ade8008":"#f8717108",
+                          border:`1px solid ${paid?"#4ade8020":"#f8717120"}`,
+                          borderRadius:9,padding:"7px 10px"}}>
+                          <span style={{fontSize:18}}>{h.avatar}</span>
+                          <div style={{flex:1}}>
+                            <div style={{fontSize:10,fontWeight:700,color:"#e2e8f0"}}>{h.name}</div>
+                            <div style={{fontSize:8,color:"#ffffff33"}}>{fmt(h.amount)}</div>
+                          </div>
+                          <div style={{fontSize:18,flexShrink:0}}>{paid?"✅":"💀"}</div>
+                          <div style={{fontSize:10,fontWeight:700,color:paid?"#4ade80":"#f87171",flexShrink:0}}>
+                            {paid?"จ่ายแล้ว":"เบี้ยว"}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </>
+              )}
+            </>
+          )}
           </div>
         )}
 
