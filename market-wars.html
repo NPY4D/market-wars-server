@@ -4527,9 +4527,14 @@ const myRank = allP.findIndex(p=>p.isMe)+1;
               ))}
             </div>
 
-            {/* Selected Asset Detail — ปรากฏเมื่อกดเลือกแล้วเท่านั้น */}
+            {/* Selected Asset Detail — sticky ติดบนสุด */}
             {selAsset && (
-              <div id="sel-detail" style={{background:G.panel,borderRadius:14,padding:14,marginBottom:12,border:`1px solid ${selAsset.color}30`}}>
+              <div id="sel-detail" style={{
+                position:"sticky",top:0,zIndex:100,
+                background:G.panel,borderRadius:14,padding:14,marginBottom:12,
+                border:`1px solid ${selAsset.color}55`,
+                boxShadow:`0 4px 24px #00000088, 0 0 0 1px ${selAsset.color}22`,
+              }}>
                 <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:8}}>
                   <div>
                     <div style={{fontSize:18,marginBottom:2}}>{selAsset.emoji} <span style={{color:selAsset.color,fontWeight:900,fontSize:15}}>{selAsset.name}</span></div>
@@ -4588,13 +4593,7 @@ const myRank = allP.findIndex(p=>p.isMe)+1;
                     transition:"border-color .15s, background .15s",
                     overflow:"hidden",
                   }}>
-                    <button onClick={()=>{
-                      if(isSel){setSelAsset(null);}
-                      else{
-                        setSelAsset(a);
-                        setTimeout(()=>document.getElementById('sel-detail')?.scrollIntoView({behavior:'smooth',block:'nearest'}),60);
-                      }
-                    }} style={{
+                    <button onClick={()=>setSelAsset(isSel?null:a)} style={{
                       flex:1,display:"flex",justifyContent:"space-between",alignItems:"center",
                       padding:"10px 12px",cursor:"pointer",fontFamily:G.font,textAlign:"left",
                       background:"transparent",border:"none",
