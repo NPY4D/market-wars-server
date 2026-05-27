@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="th">
 <head>
 <meta charset="UTF-8"/>
@@ -815,15 +815,18 @@ function SellModal({ asset, price, maxQty, onSell, onClose, hist }) {
           <span style={{color:"#ffffff28",fontSize:9}}>{maxQty}</span>
         </div>
       </div>
-      <div style={{padding:"10px 14px",borderRadius:9,marginBottom:14,
-        background:"#4ade8010",border:"1px solid #4ade8025",display:"flex",justifyContent:"space-between"}}>
-        <span style={{color:"#ffffff44",fontSize:11}}>จะได้รับ</span>
-        <span style={{color:"#4ade80",fontWeight:900,fontSize:15}}>{fmt(total)}</span>
+      <div style={{position:"sticky",bottom:0,margin:"8px -20px -28px",
+        padding:"10px 20px 28px",zIndex:5,
+        background:"linear-gradient(to bottom,#0a162800 0%,#0a1628 22%)"}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
+          <span style={{color:"#ffffff44",fontSize:11}}>จะได้รับ</span>
+          <span style={{color:"#4ade80",fontWeight:900,fontSize:15}}>{fmt(total)}</span>
+        </div>
+        <button onClick={()=>onSell(q)} style={{width:"100%",padding:14,borderRadius:10,border:"none",
+          background:"linear-gradient(135deg,#7f1d1d,#991b1b)",color:"#f87171",
+          cursor:"pointer",fontSize:14,fontWeight:900,fontFamily:G.font,boxShadow:"0 4px 16px #7f1d1d55",
+        }}>▼ ขาย {q} หน่วย (+{fmt(total)})</button>
       </div>
-      <button onClick={()=>onSell(q)} style={{width:"100%",padding:14,borderRadius:10,border:"none",
-        background:"linear-gradient(135deg,#7f1d1d,#991b1b)",color:"#f87171",
-        cursor:"pointer",fontSize:14,fontWeight:900,fontFamily:G.font,boxShadow:"0 4px 16px #7f1d1d55",
-      }}>▼ ขาย {q} หน่วย (+{fmt(total)})</button>
     </Modal>
   );
 }
@@ -1105,19 +1108,21 @@ function BuyModal({ asset, price, maxCash, onBuy, onClose, hist }) {
           <span style={{color:"#ffffff28",fontSize:9}}>{maxQ}</span>
         </div>
       </div>
-      <div style={{padding:"10px 14px",borderRadius:9,marginBottom:14,
-        background:canBuy?"#f8717110":"#f8717108",border:`1px solid ${canBuy?"#f8717125":"#f8717115"}`,
-        display:"flex",justifyContent:"space-between"}}>
-        <span style={{color:"#ffffff44",fontSize:11}}>ต้องจ่าย</span>
-        <span style={{color:canBuy?"#f87171":"#f8717155",fontWeight:900,fontSize:15}}>{fmt(total)}</span>
+      <div style={{position:"sticky",bottom:0,margin:"8px -20px -28px",
+        padding:"10px 20px 28px",zIndex:5,
+        background:"linear-gradient(to bottom,#0a162800 0%,#0a1628 22%)"}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
+          <span style={{color:"#ffffff44",fontSize:11}}>ต้องจ่าย</span>
+          <span style={{color:canBuy?"#f87171":"#f8717155",fontWeight:900,fontSize:15}}>{fmt(total)}</span>
+        </div>
+        <button onClick={()=>canBuy&&onBuy(q)} disabled={!canBuy} style={{
+          width:"100%",padding:14,borderRadius:10,border:"none",
+          background:canBuy?"linear-gradient(135deg,#14532d,#166534)":"#ffffff05",
+          color:canBuy?"#4ade80":"#ffffff15",cursor:canBuy?"pointer":"not-allowed",
+          fontSize:14,fontWeight:900,fontFamily:G.font,
+          boxShadow:canBuy?"0 4px 16px #14532d55":"none",
+        }}>▲ ซื้อ {q} หน่วย (−{fmt(total)})</button>
       </div>
-      <button onClick={()=>canBuy&&onBuy(q)} disabled={!canBuy} style={{
-        width:"100%",padding:14,borderRadius:10,border:"none",
-        background:canBuy?"linear-gradient(135deg,#14532d,#166534)":"#ffffff05",
-        color:canBuy?"#4ade80":"#ffffff15",cursor:canBuy?"pointer":"not-allowed",
-        fontSize:14,fontWeight:900,fontFamily:G.font,
-        boxShadow:canBuy?"0 4px 16px #14532d55":"none",
-      }}>▲ ซื้อ {q} หน่วย (−{fmt(total)})</button>
     </Modal>
   );
 }
@@ -1544,7 +1549,7 @@ function BlackjackModal({ onResult, onClose, onDoubleBet, bet=300, maxCash=Infin
   const dScore = handScore(dealerCards);
 
   return (
-    <Modal onClose={()=>safeResult({win:false,amount:0,msg:"ปิด"})} title="🃏 Blackjack vs Bot">
+    <Modal onClose={phase==="playing" ? ()=>safeResult({win:false,amount:0,msg:"ปิด"}) : ()=>{}} title="🃏 Blackjack vs Bot">
       <div style={{background:"#0a1628",borderRadius:14,padding:"14px 12px",marginBottom:12}}>
         {/* Dealer hand */}
         <div style={{marginBottom:14}}>
@@ -2065,7 +2070,7 @@ function HorseRaceWatchModal({ cash, onBet, onWin, onLose, onClose }) {
         const didWin = horse === finisher;
         setPositions([...posRef.current]);
         setWinner(finisher); setWon(didWin); setPhase('result');
-        if (didWin) onWin(Math.round(amount * 2.4));
+        if (didWin) onWin(Math.round(amount * 4.5));
         else onLose();
         return;
       }
@@ -2155,7 +2160,7 @@ function HorseRaceWatchModal({ cash, onBet, onWin, onLose, onClose }) {
         <div>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
             <div style={{fontSize:11,color:"#fbbf24",fontWeight:700}}>🎯 เลือกม้าที่ชอบ</div>
-            <div style={{fontSize:9,color:"#ffffff33"}}>ชนะ ×2.4</div>
+            <div style={{fontSize:9,color:"#ffffff33"}}>ชนะ ×4.5</div>
           </div>
           <div style={{display:"flex",flexDirection:"column",gap:7,marginBottom:12}}>
             {HORSE_NAMES.map((name,i) => {
@@ -2209,7 +2214,7 @@ function HorseRaceWatchModal({ cash, onBet, onWin, onLose, onClose }) {
           </div>
           <Track/>
           {playerBet&&<div style={{textAlign:"center",fontSize:10,color:HORSE_COLORS[playerBet.horse],fontWeight:700,marginTop:4}}>
-            {HORSE_EMOJIS[playerBet.horse]} {HORSE_NAMES[playerBet.horse]} — ฿{playerBet.amount.toLocaleString()} → ลุ้น ฿{Math.round(playerBet.amount*2.4).toLocaleString()}
+            {HORSE_EMOJIS[playerBet.horse]} {HORSE_NAMES[playerBet.horse]} — ฿{playerBet.amount.toLocaleString()} → ลุ้น ฿{Math.round(playerBet.amount*4.5).toLocaleString()}
           </div>}
         </div>
       )}
@@ -2227,7 +2232,7 @@ function HorseRaceWatchModal({ cash, onBet, onWin, onLose, onClose }) {
             </div>
             <div style={{fontSize:won?22:15,fontWeight:700,color:won?"#fbbf24":"#f87171"}}>
               {won
-                ? `+฿${(Math.round(playerBet.amount*2.4)-playerBet.amount).toLocaleString()}`
+                ? `+฿${(Math.round(playerBet.amount*4.5)-playerBet.amount).toLocaleString()}`
                 : `-฿${playerBet?.amount.toLocaleString()}`}
             </div>
           </div>
@@ -2238,7 +2243,7 @@ function HorseRaceWatchModal({ cash, onBet, onWin, onLose, onClose }) {
         </div>
       )}
 
-      <div style={{textAlign:"center",marginTop:10,fontSize:9,color:"#ffffff22"}}>ชนะ = ×2.4 · ปิด modal ได้ระหว่างแข่ง</div>
+      <div style={{textAlign:"center",marginTop:10,fontSize:9,color:"#ffffff22"}}>ชนะ = ×4.5 · ปิด modal ได้ระหว่างแข่ง</div>
     </Modal>
   );
 }
@@ -2414,10 +2419,10 @@ function LotteryModal({ onResult, onClose }) {
     setTimeout(() => {
       const r = Math.random();
       let result;
-      if (r < 0.001)       result = { win:true,  amount:50000, msg:"💰💰 MEGA JACKPOT!! +฿50,000" };
-      else if (r < 0.006)  result = { win:true,  amount:15000, msg:"🎉 JACKPOT! +฿15,000" };
-      else if (r < 0.025)  result = { win:true,  amount:2000,  msg:"🎊 รางวัลที่ 2 +฿2,000" };
-      else if (r < 0.10)   result = { win:true,  amount:200,   msg:"✨ รางวัลเล็ก +฿200" };
+      if (r < 0.001)       result = { win:true,  amount:30000, msg:"💰💰 MEGA JACKPOT!! +฿30,000" };
+      else if (r < 0.006)  result = { win:true,  amount:7000,  msg:"🎉 JACKPOT! +฿7,000" };
+      else if (r < 0.025)  result = { win:true,  amount:800,   msg:"🎊 รางวัลที่ 2 +฿800" };
+      else if (r < 0.10)   result = { win:true,  amount:100,   msg:"✨ รางวัลเล็ก +฿100" };
       else                 result = { win:false, amount:0,      msg:"😭 ไม่ถูกรางวัล" };
       setRes(result); setPhase("done");
     }, 1200);
@@ -2467,7 +2472,7 @@ const SCRATCH_LOSE_MSGS = [
 function ScratchModal({ onResult, onClose }) {
   const [revealed, setRevealed] = useState([false,false,false]);
   const [prizes] = useState(() => {
-    const pool = [0,0,0,0,0,100,300,800,2000,5000];
+    const pool = [0,0,0,0,0,0,0,0,30,80,500];
     return Array.from({length:3},()=>pool[Math.floor(Math.random()*pool.length)]);
   });
   const [loseMsg] = useState(()=>SCRATCH_LOSE_MSGS[Math.floor(Math.random()*SCRATCH_LOSE_MSGS.length)]);
@@ -2483,7 +2488,7 @@ function ScratchModal({ onResult, onClose }) {
   };
   const total = prizes.reduce((s,v)=>s+v,0);
   return (
-    <Modal onClose={()=>safeResult({win:false,amount:0,msg:"ปิด"})} title="🃏 Scratch Card (฿50)">
+    <Modal onClose={()=>safeResult({win:false,amount:0,msg:"ปิด"})} title="🃏 Scratch Card (฿200)">
       <div style={{textAlign:"center",padding:"10px 0 20px"}}>
         <div style={{fontSize:10,color:"#ffffff33",marginBottom:4}}>แตะเพื่อขูด 3 ช่อง</div>
         <div style={{display:"flex",gap:10,justifyContent:"center",marginBottom:16}}>
@@ -2515,8 +2520,8 @@ function CrashModal({ onResult, onClose, bet=200 }) {
   const crashRef = useRef(null);
   if (crashRef.current === null) {
     const u = Math.random();
-    if (u < 0.51) crashRef.current = "1.00"; // instant crash 51%
-    else crashRef.current = Math.min(50, 0.49 / (1 - u)).toFixed(2);
+    if (u < 0.04) crashRef.current = "1.00"; // 4% instant crash (house edge)
+    else crashRef.current = Math.min(50, 0.96 / (1 - u)).toFixed(2);
   }
   const intervalR = useRef(null);
   const firedRef  = useRef(false);
@@ -2656,15 +2661,14 @@ function RouletteModal({ onResult, onClose, bet=150 }) {
       const displayN = n === 37 ? "00" : n;
       setBall(displayN); setPhase("result");
       const isRed=REDS.includes(n), isBlack=n!==0&&n!==37&&!isRed;
-      const houseStrike = Math.random() < 0.48; // 48% of spins house wins regardless
       let win=false,amount=0,msg="";
       if(numPick!==null){
-        win = !houseStrike && n===numPick; amount=bet*36;
+        win = n===numPick; amount=bet*36;
         msg=win?`🎯 เลข ${displayN}! ×35 = +฿${(bet*35).toLocaleString()}!!`:`❌ ออก ${displayN}`;
       }
-      else if(choice==="red"){win=!houseStrike&&isRed;amount=bet*2;msg=win?`🔴 แดง! +฿${bet}`:`ออก ${displayN} (ไม่ใช่แดง)`;}
-      else if(choice==="black"){win=!houseStrike&&isBlack;amount=bet*2;msg=win?`⚫ ดำ! +฿${bet}`:`ออก ${displayN} (ไม่ใช่ดำ)`;}
-      else if(choice==="zero"){win=!houseStrike&&(n===0||n===37);amount=bet*18;msg=win?`0️⃣ ZERO!! +฿${bet*17}`:`❌ ออก ${displayN}`;}
+      else if(choice==="red"){win=isRed;amount=bet*2;msg=win?`🔴 แดง! +฿${bet}`:`ออก ${displayN} (ไม่ใช่แดง)`;}
+      else if(choice==="black"){win=isBlack;amount=bet*2;msg=win?`⚫ ดำ! +฿${bet}`:`ออก ${displayN} (ไม่ใช่ดำ)`;}
+      else if(choice==="zero"){win=(n===0||n===37);amount=bet*18;msg=win?`0️⃣ ZERO!! +฿${bet*17}`:`❌ ออก ${displayN}`;}
       setTimeout(()=>safeResult({win,amount:win?amount:0,msg}),1000);
     },1500);
   };
@@ -3584,7 +3588,7 @@ function GameScreen({ session, initPlayers, client, onEnd }) {
   },[]);
 
   const openBox = (type) => {
-    const costs = {card:200,figure:800,gameid:400};
+    const costs = {card:500,figure:2500,gameid:1000};
     const cost = costs[type];
     if((boxStockR.current[type]||0) <= 0){ showNotif("❌ สต็อกหมด — รอรีสต็อก","#f87171"); return; }
     if(cashR.current < cost){ showNotif("❌ เงินไม่พอ","#f87171"); return; }
@@ -4220,7 +4224,7 @@ function GameScreen({ session, initPlayers, client, onEnd }) {
   const doRaceWin = (payout) => {
     cashR.current += payout; syncCash();
     _snd.play('jackpot'); setConfetti(true); setTimeout(()=>setConfetti(false),3000);
-    showNotif(`🏆 +฿${payout.toLocaleString()} (×2.4)`, "#fbbf24");
+    showNotif(`🏆 +฿${payout.toLocaleString()} (×4.5)`, "#fbbf24");
   };
   const doRaceLose = () => { _snd.play('bust'); showNotif("💔 ม้าแพ้","#f87171"); };
 
@@ -4274,7 +4278,7 @@ function GameScreen({ session, initPlayers, client, onEnd }) {
     // offline
     cashR.current -= bet; syncCash(); setModal(id);
   };
-  const GAMBLE_COSTS = {lottery:100,scratch:50,crash:200,flip:300,roulette:150,plinko:200,mines:200,blackjack:300};
+  const GAMBLE_COSTS = {lottery:100,scratch:200,crash:200,flip:300,roulette:150,plinko:200,mines:200,blackjack:300};
   const handleGambleResult = (res) => {
     if (onlineRef.current && client?.ok) {
       client.gamble(modal, GAMBLE_COSTS[modal]||100, res.choice||null);
@@ -4802,15 +4806,15 @@ const myRank = allP.findIndex(p=>p.isMe)+1;
             </div>
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
               {[
-                {id:"lottery",  name:"🎟️ ล็อตเตอรี่", cost:100, desc:"ลุ้น Mega ฿50,000",     c:"#fbbf24", fixed:true},
-                {id:"scratch",  name:"🃏 Scratch",     cost:50,  desc:"ขูด 3 ช่อง ลุ้นรางวัล", c:"#4ade80", fixed:true},
+                {id:"lottery",  name:"🎟️ ล็อตเตอรี่", cost:100, desc:"ลุ้น Mega ฿30,000",     c:"#fbbf24", fixed:true},
+                {id:"scratch",  name:"🃏 Scratch",     cost:200, desc:"ขูด 3 ช่อง ลุ้นรางวัล", c:"#4ade80", fixed:true},
                 {id:"crash",    name:"🚀 Crash",       cost:200, desc:"Cash Out ก่อน Crash!",   c:"#38bdf8", fixed:false},
                 {id:"flip",     name:"🪙 เหรียญ",      cost:200, desc:"ทายหัว/ก้อย รับ ×2",     c:"#f472b6", fixed:false},
                 {id:"roulette", name:"🎰 รูเล็ต",      cost:150, desc:"แดง/ดำ/Zero/ตัวเลข",    c:"#c084fc", fixed:false},
                 {id:"plinko",   name:"🎯 Plinko",      cost:200, desc:"ปล่อยลูก ลุ้น multiplier",c:"#38bdf8", fixed:false},
                 {id:"mines",    name:"💎 Mines",       cost:200, desc:"หลีกเลี่ยงระเบิด Cash Out",c:"#4ade80", fixed:false},
                 {id:"blackjack",name:"🃏 Blackjack",   cost:300, desc:"ชนะ Dealer รับ ×2",       c:"#c084fc", fixed:false},
-                {id:"horserace",name:"🏇 แข่งม้า",    cost:0,   desc:"เดิมพัน-รอ-ลุ้น ×2.4",     c:"#fbbf24", fixed:true},
+                {id:"horserace",name:"🏇 แข่งม้า",    cost:0,   desc:"เดิมพัน-รอ-ลุ้น ×4.5",     c:"#fbbf24", fixed:true},
               ].map(({id,name,cost,desc,c,fixed})=>(
                 <button key={id} onClick={()=>id==='horserace'?setModal('horserace'):fixed?openGamble(id,cost):setBetSelectId(id)} style={{
                   padding:"14px 10px",borderRadius:14,cursor:"pointer",fontFamily:G.font,
@@ -4953,9 +4957,9 @@ const myRank = allP.findIndex(p=>p.isMe)+1;
               </div>
               <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:7}}>
                 {[
-                  {t:"card",  l:"🃏 การ์ด",   cost:200,d:"N → UR Anime"},
-                  {t:"figure",l:"🎎 ฟิกเกอร์",cost:800,d:"Standard→GodTier"},
-                  {t:"gameid",l:"🎮 ไอดีเกม", cost:400,d:"Basic → Limited"},
+                  {t:"card",  l:"🃏 การ์ด",   cost:500, d:"N → UR Anime"},
+                  {t:"figure",l:"🎎 ฟิกเกอร์",cost:2500,d:"Standard→GodTier"},
+                  {t:"gameid",l:"🎮 ไอดีเกม", cost:1000,d:"Basic → Limited"},
                 ].map(({t,l,cost,d})=>{
                   const stock = boxStock[t]||0;
                   const canBuy = stock > 0;
@@ -5247,13 +5251,13 @@ const myRank = allP.findIndex(p=>p.isMe)+1;
 
               <GH color="#f87171">🎲 Gamble Mini Games</GH>
               <GT cols={["เกม","ราคา","กำไรสูงสุด","โอกาสชนะ"]} rows={[
-                ["🎟️ ล็อตเตอรี่","฿100","฿50,000 (Jackpot)","~11%"],
-                ["🃏 Scratch Card","฿50","฿200 (3 ช่อง)","~35%"],
+                ["🎟️ ล็อตเตอรี่","฿100","฿30,000 (Jackpot)","~12%"],
+                ["🃏 Scratch Card","฿200","฿1,650 (3 ช่อง)","~22%"],
                 ["🚀 Crash","฿200","ไม่จำกัด (จับเวลา)","ขึ้นกับตัวเอง"],
-                ["🪙 เหรียญทาย","฿300","฿600 (×2)","~45%"],
+                ["🪙 เหรียญทาย","฿300","฿600 (×2)","~48%"],
                 ["🎰 รูเล็ต (เลข)","฿150","฿5,250 (×35)","2.6%"],
               ]}/>
-              <Tip color="#f87171">Crash Game — Cash Out เร็วๆ ที่ ×1.5 ถึง ×2.5 สม่ำเสมอ ดีกว่ารอ ×10 แล้วพลาด</Tip>
+              <Tip color="#f87171">Crash Game — Cash Out เร็วๆ ที่ ×1.5–×2.5 สม่ำเสมอดีกว่ารอ ×10 แล้วพลาด · house edge ~4%</Tip>
 
               <GH color="#fbbf24">🏇 Horse Race</GH>
               <div style={{background:"#ffffff05",borderRadius:10,padding:"12px 14px",border:"1px solid #ffffff0a",marginBottom:8}}>
@@ -5261,7 +5265,7 @@ const myRank = allP.findIndex(p=>p.isMe)+1;
                   {t:"กดเมื่อไหรก็ได้",d:"แตะปุ่มแข่งม้าหรือ banner สีทองในหน้าเกม"},
                   {t:"เลือกม้า",d:"เลือก 1 ใน 5 ม้า — NPC อื่นก็เดิมพันด้วย"},
                   {t:"เดิมพัน",d:"กดจำนวนเงินที่ต้องการ → แข่งเลยทันที"},
-                  {t:"ชนะ",d:"ม้าที่เลือกถึงเส้นชัยก่อน → ได้ ×2.4 ของเงินเดิม"},
+                  {t:"ชนะ",d:"ม้าที่เลือกถึงเส้นชัยก่อน → ได้ ×4.5 ของเงินเดิม"},
                   {t:"แข่งอีก",d:"ดูผลแล้วกด 'แข่งอีก!' ได้ทันที"},
                 ].map(({t,d})=>(
                   <div key={t} style={{display:"flex",gap:10,marginBottom:7,alignItems:"flex-start"}}>
