@@ -214,6 +214,21 @@ function genHypeItem(type){
   const bp=rar.bp[0]+Math.floor(Math.random()*(rar.bp[1]-rar.bp[0]));
   return {id:`h${Date.now()}${Math.random().toString(36).slice(2,5)}`,type,name,emoji,rarity:rar.r,rarityColor:rar.c,bp,listed:false,listPrice:null};
 }
+// genHypeItem แบบ bias rarity ตาม NPC risk — ใช้กับ ยึดทรัพย์
+function genSeizeItemByRisk(type, risk) {
+  const tbl = RARITY_TABLE[type];
+  // low → N/R เยอะ | mid → R/SR เยอะ | high → SR/SSR/UR เยอะ
+  const biasMap = { low:[2.2,1.8,0.4,0.08,0.03], mid:[0.6,1.2,2.0,1.4,0.6], high:[0.1,0.3,1.0,2.8,3.5] };
+  const mult = biasMap[risk] || biasMap.mid;
+  const biasedTbl = tbl.map((row,i)=>({...row, w:row.w*(mult[i]??mult[mult.length-1])}));
+  const rar = pickRarity(biasedTbl);
+  let name, emoji;
+  if(type==="card"){const ch=ANIME_CHARS[Math.floor(Math.random()*ANIME_CHARS.length)];name=`${ch} [${rar.r}]`;emoji="🃏";}
+  else if(type==="figure"){const s=ANIME_SERIES[Math.floor(Math.random()*ANIME_SERIES.length)];name=`${s} Fig[${rar.r}]`;emoji="🎎";}
+  else{const g=GAME_TITLES[Math.floor(Math.random()*GAME_TITLES.length)];name=`${g} [${rar.r}]`;emoji="🎮";}
+  const bp=rar.bp[0]+Math.floor(Math.random()*(rar.bp[1]-rar.bp[0]));
+  return {id:`h${Date.now()}${Math.random().toString(36).slice(2,5)}`,type,name,emoji,rarity:rar.r,rarityColor:rar.c,bp,listed:false,listPrice:null};
+}
 const CAREERS = [
   { id:'vendor',   name:'🍜 แม่ค้า',      cost:3000,  color:'#fb923c', desc:'รับออเดอร์ทำอาหาร' },
   { id:'rider',    name:'🚚 ไรเดอร์',      cost:7000,  color:'#60a5fa', desc:'ส่งของเลือกเส้นทาง' },
@@ -3881,6 +3896,132 @@ function GameScreen({ session, initPlayers, client, onEnd }) {
     _snd.play('beep');
   };
 
+  // ── DEBT RECOVERY ──
+  const [debtActionMode, setDebtActionMode] = useState(null); // at-timestamp ของ entry ที่กำลัง expand
+
+  const markHistAction = (at, fields) => {
+    loanHistoryR.current = loanHistoryR.current.map(h=>h.at===at?{...h,...fields}:h);
+    setLoanHistory([...loanHistoryR.current]);
+  };
+
+  const doCollectDebt = (entry, method) => {
+    const cfg = {
+      // ลดโอกาสสำเร็จ + เพิ่ม backfire/partial outcomes
+      letter: {cost:0,    label:"จดหมาย"},
+      agent:  {cost:800,  label:"นักทวง"},
+      court:  {cost:2500, label:"ศาล"},
+    }[method];
+    if (cashR.current < cfg.cost) { showNotif("❌ เงินสดไม่พอ","#f87171"); return; }
+    if (cfg.cost > 0) { cashR.current -= cfg.cost; syncCash(); }
+    setDebtActionMode(null);
+
+    const roll = Math.random();
+
+    if (method === "letter") {
+      // ฟรี → โอกาสสำเร็จต่ำ 18%, partial 12%, fail 70%
+      if (roll < 0.18) {
+        const recovered = Math.round(entry.amount * (0.35 + Math.random()*0.25));
+        cashR.current += recovered; syncCash();
+        markHistAction(entry.at, {actionTaken:"collected", recovered});
+        _snd.play('win');
+        showNotif(`📬 จดหมายได้ผล! +฿${recovered.toLocaleString()}`, "#4ade80");
+      } else if (roll < 0.30) {
+        const recovered = Math.round(entry.amount * (0.10 + Math.random()*0.15));
+        cashR.current += recovered; syncCash();
+        markHistAction(entry.at, {actionTaken:"collected", recovered});
+        showNotif(`📬 ได้บางส่วน +฿${recovered.toLocaleString()}`, "#fbbf24");
+      } else {
+        markHistAction(entry.at, {actionTaken:"collect_failed"});
+        _snd.play('bust');
+        showNotif("📬 ไม่มีการตอบรับ — เงินหาย", "#f87171");
+      }
+
+    } else if (method === "agent") {
+      // ฿800 → สำเร็จ 38%, partial 18%, fail เสีย ค่าจ้าง 44%
+      if (roll < 0.38) {
+        const recovered = Math.round(entry.amount * (0.55 + Math.random()*0.25));
+        cashR.current += recovered; syncCash();
+        markHistAction(entry.at, {actionTaken:"collected", recovered});
+        _snd.play('win');
+        showNotif(`🕵️ นักทวงสำเร็จ! +฿${recovered.toLocaleString()}`, "#4ade80");
+      } else if (roll < 0.56) {
+        const recovered = Math.round(entry.amount * (0.20 + Math.random()*0.20));
+        cashR.current += recovered; syncCash();
+        markHistAction(entry.at, {actionTaken:"collected", recovered});
+        showNotif(`🕵️ ทวงได้บางส่วน +฿${recovered.toLocaleString()} (เสีย ฿800 ไปแล้ว)`, "#fbbf24");
+      } else {
+        markHistAction(entry.at, {actionTaken:"collect_failed"});
+        _snd.play('bust');
+        showNotif("🕵️ นักทวงหาตัวไม่เจอ — เสีย ฿800 ฟรี", "#f87171");
+      }
+
+    } else { // court
+      // ฿2,500 → สำเร็จ 52%, partial 15%, backfire (NPC ฟ้องกลับ) 8%, fail 25%
+      if (roll < 0.52) {
+        const recovered = Math.round(entry.amount * (0.70 + Math.random()*0.28));
+        cashR.current += recovered; syncCash();
+        markHistAction(entry.at, {actionTaken:"collected", recovered});
+        _snd.play('win');
+        showNotif(`⚖️ ชนะคดี! +฿${recovered.toLocaleString()}`, "#4ade80");
+      } else if (roll < 0.67) {
+        const recovered = Math.round(entry.amount * (0.30 + Math.random()*0.25));
+        cashR.current += recovered; syncCash();
+        markHistAction(entry.at, {actionTaken:"collected", recovered});
+        showNotif(`⚖️ ยอมความนอกศาล +฿${recovered.toLocaleString()} (เสีย ฿2,500)`, "#fbbf24");
+      } else if (roll < 0.75) {
+        // backfire — NPC ฟ้องกลับ เสียค่าโง่เพิ่ม
+        const penalty = Math.round(800 + Math.random()*1200);
+        cashR.current -= penalty; syncCash();
+        markHistAction(entry.at, {actionTaken:"collect_failed"});
+        _snd.play('bust');
+        showNotif(`⚖️ NPC ฟ้องกลับ! เสียเพิ่ม ฿${penalty.toLocaleString()}`, "#f87171");
+      } else {
+        markHistAction(entry.at, {actionTaken:"collect_failed"});
+        _snd.play('bust');
+        showNotif("⚖️ แพ้คดี — เสีย ฿2,500 ฟรี", "#f87171");
+      }
+    }
+  };
+
+  const doSeizeAssets = (entry) => {
+    const npc = LOAN_NPCS.find(n=>n.id===entry.npcId);
+    const risk = npc?.risk || "mid";
+    setDebtActionMode(null);
+    const roll = Math.random();
+
+    if (roll < 0.28) {
+      // NPC ซ่อนทรัพย์หมดแล้ว — ไม่ได้อะไร
+      markHistAction(entry.at, {actionTaken:"collect_failed"});
+      _snd.play('bust');
+      showNotif(`📦 ${npc?.avatar||""}${npc?.name||"NPC"} ซ่อนทรัพย์ไปหมดแล้ว ไม่ได้อะไร`, "#f87171");
+    } else if (roll < 0.55) {
+      // ได้ของ แต่คุณภาพต่ำ (บังคับ risk="low" เสมอ)
+      const types = ["card","figure","gameid"];
+      const t = types[Math.floor(Math.random()*types.length)];
+      const item = genSeizeItemByRisk(t, "low");
+      hypeInvR.current = [...hypeInvR.current, item];
+      setHypeInv([...hypeInvR.current]);
+      markHistAction(entry.at, {actionTaken:"seized"});
+      _snd.play('beep');
+      showNotif(`📦 ยึดได้ 1 ชิ้น แต่ของไม่ค่อยดี — ${item.emoji}${item.name}`, "#ffffff66");
+    } else {
+      // ได้ของตามปกติ
+      const types = ["card","figure","gameid"];
+      const count = risk==="high" ? 2 : 1;
+      const items = Array.from({length:count}, ()=> {
+        const t = risk==="high" ? (Math.random()<0.55?"figure":"card") :
+                  risk==="low"  ? (Math.random()<0.6?"card":"gameid") :
+                  types[Math.floor(Math.random()*types.length)];
+        return genSeizeItemByRisk(t, risk);
+      });
+      hypeInvR.current = [...hypeInvR.current, ...items];
+      setHypeInv([...hypeInvR.current]);
+      markHistAction(entry.at, {actionTaken:"seized"});
+      _snd.play('jackpot');
+      showNotif(`📦 ยึดทรัพย์ได้ ${count} ชิ้น — ดูในกระแส!`, "#c084fc");
+    }
+  };
+
   // ── HYPE NEGOTIATION ──
   const showNegoResult = (negoId, result) => {
     setNegoResults(prev => ({...prev, [negoId]: result}));
@@ -4517,7 +4658,7 @@ function GameScreen({ session, initPlayers, client, onEnd }) {
             if (Math.random() < npc.defaultChance) {
               _snd.play('bust');
               showNotif(`💀 ${npc.name} เบี้ยวหนี! เสีย ฿${loan.amount.toLocaleString()}`, "#f87171");
-              newHistory.unshift({npcId:npc.id, name:npc.name, avatar:npc.avatar, riskColor:npc.riskColor, amount:loan.amount, status:"defaulted", at:Date.now()});
+              newHistory.unshift({npcId:npc.id, name:npc.name, avatar:npc.avatar, riskColor:npc.riskColor, amount:loan.amount, status:"defaulted", actionTaken:null, at:Date.now()});
             } else {
               const interest = Math.round(loan.amount * npc.rate);
               cashR.current += interest;
@@ -5549,20 +5690,71 @@ const myRank = allP.findIndex(p=>p.isMe)+1;
                   <div style={{display:"flex",flexDirection:"column",gap:5}}>
                     {loanHistory.slice(0,10).map((h,i)=>{
                       const paid = h.status==="paid";
+                      const canAct = !paid && h.actionTaken===null;
+                      const pickingMethod = debtActionMode===h.at;
                       return (
-                        <div key={i} style={{display:"flex",alignItems:"center",gap:8,
-                          background:paid?"#4ade8008":"#f8717108",
-                          border:`1px solid ${paid?"#4ade8020":"#f8717120"}`,
-                          borderRadius:9,padding:"7px 10px"}}>
-                          <span style={{fontSize:18}}>{h.avatar}</span>
-                          <div style={{flex:1}}>
-                            <div style={{fontSize:10,fontWeight:700,color:"#e2e8f0"}}>{h.name}</div>
-                            <div style={{fontSize:8,color:"#ffffff33"}}>{fmt(h.amount)}</div>
+                        <div key={i} style={{
+                          background:paid?"#4ade8008":h.actionTaken?"#ffffff05":"#f8717108",
+                          border:`1px solid ${paid?"#4ade8020":h.actionTaken?"#ffffff10":"#f8717128"}`,
+                          borderRadius:10,padding:"8px 10px",
+                        }}>
+                          {/* Row หลัก */}
+                          <div style={{display:"flex",alignItems:"center",gap:8}}>
+                            <span style={{fontSize:18}}>{h.avatar}</span>
+                            <div style={{flex:1}}>
+                              <div style={{fontSize:10,fontWeight:700,color:"#e2e8f0"}}>{h.name}</div>
+                              <div style={{fontSize:8,color:"#ffffff33"}}>
+                                เงินต้น {fmt(h.amount)}
+                                {h.actionTaken==="collected" && <span style={{color:"#4ade80"}}> · ได้คืน ฿{(h.recovered||0).toLocaleString()}</span>}
+                                {h.actionTaken==="collect_failed" && <span style={{color:"#f87171"}}> · ทวงไม่สำเร็จ</span>}
+                                {h.actionTaken==="seized" && <span style={{color:"#c084fc"}}> · ยึดทรัพย์แล้ว</span>}
+                              </div>
+                            </div>
+                            <div style={{fontSize:16,flexShrink:0}}>
+                              {paid?"✅":h.actionTaken?"🔒":"💀"}
+                            </div>
+                            <div style={{fontSize:10,fontWeight:700,flexShrink:0,
+                              color:paid?"#4ade80":h.actionTaken?"#ffffff44":"#f87171"}}>
+                              {paid?"จ่ายแล้ว":h.actionTaken?"จัดการแล้ว":"เบี้ยว"}
+                            </div>
                           </div>
-                          <div style={{fontSize:18,flexShrink:0}}>{paid?"✅":"💀"}</div>
-                          <div style={{fontSize:10,fontWeight:700,color:paid?"#4ade80":"#f87171",flexShrink:0}}>
-                            {paid?"จ่ายแล้ว":"เบี้ยว"}
-                          </div>
+
+                          {/* ปุ่มเลือกวิธี (ยังไม่ได้ทำอะไร) */}
+                          {canAct && !pickingMethod && (
+                            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:5,marginTop:8}}>
+                              <button onClick={()=>setDebtActionMode(h.at)} style={{
+                                padding:"6px 0",borderRadius:7,border:"1px solid #fbbf2450",
+                                background:"#fbbf2412",color:"#fbbf24",cursor:"pointer",
+                                fontSize:10,fontFamily:G.font,fontWeight:700}}>💸 ทวงหนี้</button>
+                              <button onClick={()=>doSeizeAssets(h)} style={{
+                                padding:"6px 0",borderRadius:7,border:"1px solid #c084fc50",
+                                background:"#c084fc12",color:"#c084fc",cursor:"pointer",
+                                fontSize:10,fontFamily:G.font,fontWeight:700}}>📦 ยึดทรัพย์</button>
+                            </div>
+                          )}
+
+                          {/* เลือกวิธีทวง */}
+                          {canAct && pickingMethod && (
+                            <div style={{marginTop:8,display:"flex",flexDirection:"column",gap:5}}>
+                              <div style={{fontSize:8,color:"#ffffff33",marginBottom:2}}>เลือกวิธีทวงหนี้:</div>
+                              {[
+                                {k:"letter",l:"✉️ ส่งจดหมาย",sub:"ฟรี · 18% สำเร็จ · อาจได้บางส่วน · 70% ไม่ได้เลย"},
+                                {k:"agent", l:"🕵️ จ้างนักทวง",sub:"฿800 · 38% สำเร็จ · 18% บางส่วน · 44% เสียเปล่า"},
+                                {k:"court",  l:"⚖️ ขึ้นศาล",   sub:"฿2,500 · 52% ชนะ · 8% NPC ฟ้องกลับ · 25% แพ้"},
+                              ].map(m=>(
+                                <button key={m.k} onClick={()=>doCollectDebt(h,m.k)} style={{
+                                  padding:"7px 10px",borderRadius:8,textAlign:"left",cursor:"pointer",
+                                  border:"1px solid #fbbf2430",background:"#fbbf2408",fontFamily:G.font}}>
+                                  <div style={{fontSize:10,fontWeight:700,color:"#fbbf24"}}>{m.l}</div>
+                                  <div style={{fontSize:8,color:"#ffffff44"}}>{m.sub}</div>
+                                </button>
+                              ))}
+                              <button onClick={()=>setDebtActionMode(null)} style={{
+                                padding:"5px 0",borderRadius:7,border:"1px solid #ffffff15",
+                                background:"transparent",color:"#ffffff33",cursor:"pointer",
+                                fontSize:9,fontFamily:G.font}}>ยกเลิก</button>
+                            </div>
+                          )}
                         </div>
                       );
                     })}
