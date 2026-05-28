@@ -3599,6 +3599,7 @@ function GameScreen({ session, initPlayers, client, onEnd }) {
   const loanTickR  = useRef(0);
   const loanSpawnR = useRef(0); // countdown to next request spawn
   const loanIdR    = useRef(0);
+  const loanHidR   = useRef(0); // unique id สำหรับแต่ละ history entry
 
   // ── MARKET DEMAND (ตลาดซื้อของที่ listing อยู่) ──
   const demandTickR = useRef(DEMAND_INTERVAL_MIN + Math.floor(Math.random()*(DEMAND_INTERVAL_MAX-DEMAND_INTERVAL_MIN)));
@@ -3899,8 +3900,8 @@ function GameScreen({ session, initPlayers, client, onEnd }) {
   // ── DEBT RECOVERY ──
   const [debtActionMode, setDebtActionMode] = useState(null); // at-timestamp ของ entry ที่กำลัง expand
 
-  const markHistAction = (at, fields) => {
-    loanHistoryR.current = loanHistoryR.current.map(h=>h.at===at?{...h,...fields}:h);
+  const markHistAction = (hid, fields) => {
+    loanHistoryR.current = loanHistoryR.current.map(h=>h.hid===hid?{...h,...fields}:h);
     setLoanHistory([...loanHistoryR.current]);
   };
 
@@ -3922,16 +3923,16 @@ function GameScreen({ session, initPlayers, client, onEnd }) {
       if (roll < 0.18) {
         const recovered = Math.round(entry.amount * (0.35 + Math.random()*0.25));
         cashR.current += recovered; syncCash();
-        markHistAction(entry.at, {actionTaken:"collected", recovered});
+        markHistAction(entry.hid, {actionTaken:"collected", recovered});
         _snd.play('win');
         showNotif(`📬 จดหมายได้ผล! +฿${recovered.toLocaleString()}`, "#4ade80");
       } else if (roll < 0.30) {
         const recovered = Math.round(entry.amount * (0.10 + Math.random()*0.15));
         cashR.current += recovered; syncCash();
-        markHistAction(entry.at, {actionTaken:"collected", recovered});
+        markHistAction(entry.hid, {actionTaken:"collected", recovered});
         showNotif(`📬 ได้บางส่วน +฿${recovered.toLocaleString()}`, "#fbbf24");
       } else {
-        markHistAction(entry.at, {actionTaken:"collect_failed"});
+        markHistAction(entry.hid, {actionTaken:"collect_failed"});
         _snd.play('bust');
         showNotif("📬 ไม่มีการตอบรับ — เงินหาย", "#f87171");
       }
@@ -3941,16 +3942,16 @@ function GameScreen({ session, initPlayers, client, onEnd }) {
       if (roll < 0.38) {
         const recovered = Math.round(entry.amount * (0.55 + Math.random()*0.25));
         cashR.current += recovered; syncCash();
-        markHistAction(entry.at, {actionTaken:"collected", recovered});
+        markHistAction(entry.hid, {actionTaken:"collected", recovered});
         _snd.play('win');
         showNotif(`🕵️ นักทวงสำเร็จ! +฿${recovered.toLocaleString()}`, "#4ade80");
       } else if (roll < 0.56) {
         const recovered = Math.round(entry.amount * (0.20 + Math.random()*0.20));
         cashR.current += recovered; syncCash();
-        markHistAction(entry.at, {actionTaken:"collected", recovered});
+        markHistAction(entry.hid, {actionTaken:"collected", recovered});
         showNotif(`🕵️ ทวงได้บางส่วน +฿${recovered.toLocaleString()} (เสีย ฿800 ไปแล้ว)`, "#fbbf24");
       } else {
-        markHistAction(entry.at, {actionTaken:"collect_failed"});
+        markHistAction(entry.hid, {actionTaken:"collect_failed"});
         _snd.play('bust');
         showNotif("🕵️ นักทวงหาตัวไม่เจอ — เสีย ฿800 ฟรี", "#f87171");
       }
@@ -3960,23 +3961,23 @@ function GameScreen({ session, initPlayers, client, onEnd }) {
       if (roll < 0.52) {
         const recovered = Math.round(entry.amount * (0.70 + Math.random()*0.28));
         cashR.current += recovered; syncCash();
-        markHistAction(entry.at, {actionTaken:"collected", recovered});
+        markHistAction(entry.hid, {actionTaken:"collected", recovered});
         _snd.play('win');
         showNotif(`⚖️ ชนะคดี! +฿${recovered.toLocaleString()}`, "#4ade80");
       } else if (roll < 0.67) {
         const recovered = Math.round(entry.amount * (0.30 + Math.random()*0.25));
         cashR.current += recovered; syncCash();
-        markHistAction(entry.at, {actionTaken:"collected", recovered});
+        markHistAction(entry.hid, {actionTaken:"collected", recovered});
         showNotif(`⚖️ ยอมความนอกศาล +฿${recovered.toLocaleString()} (เสีย ฿2,500)`, "#fbbf24");
       } else if (roll < 0.75) {
         // backfire — NPC ฟ้องกลับ เสียค่าโง่เพิ่ม
         const penalty = Math.round(800 + Math.random()*1200);
         cashR.current -= penalty; syncCash();
-        markHistAction(entry.at, {actionTaken:"collect_failed"});
+        markHistAction(entry.hid, {actionTaken:"collect_failed"});
         _snd.play('bust');
         showNotif(`⚖️ NPC ฟ้องกลับ! เสียเพิ่ม ฿${penalty.toLocaleString()}`, "#f87171");
       } else {
-        markHistAction(entry.at, {actionTaken:"collect_failed"});
+        markHistAction(entry.hid, {actionTaken:"collect_failed"});
         _snd.play('bust');
         showNotif("⚖️ แพ้คดี — เสีย ฿2,500 ฟรี", "#f87171");
       }
@@ -3991,7 +3992,7 @@ function GameScreen({ session, initPlayers, client, onEnd }) {
 
     if (roll < 0.28) {
       // NPC ซ่อนทรัพย์หมดแล้ว — ไม่ได้อะไร
-      markHistAction(entry.at, {actionTaken:"collect_failed"});
+      markHistAction(entry.hid, {actionTaken:"collect_failed"});
       _snd.play('bust');
       showNotif(`📦 ${npc?.avatar||""}${npc?.name||"NPC"} ซ่อนทรัพย์ไปหมดแล้ว ไม่ได้อะไร`, "#f87171");
     } else if (roll < 0.55) {
@@ -4001,24 +4002,44 @@ function GameScreen({ session, initPlayers, client, onEnd }) {
       const item = genSeizeItemByRisk(t, "low");
       hypeInvR.current = [...hypeInvR.current, item];
       setHypeInv([...hypeInvR.current]);
-      markHistAction(entry.at, {actionTaken:"seized"});
+      markHistAction(entry.hid, {actionTaken:"seized"});
       _snd.play('beep');
       showNotif(`📦 ยึดได้ 1 ชิ้น แต่ของไม่ค่อยดี — ${item.emoji}${item.name}`, "#ffffff66");
     } else {
-      // ได้ของตามปกติ
-      const types = ["card","figure","gameid"];
-      const count = risk==="high" ? 2 : 1;
-      const items = Array.from({length:count}, ()=> {
-        const t = risk==="high" ? (Math.random()<0.55?"figure":"card") :
-                  risk==="low"  ? (Math.random()<0.6?"card":"gameid") :
-                  types[Math.floor(Math.random()*types.length)];
-        return genSeizeItemByRisk(t, risk);
-      });
-      hypeInvR.current = [...hypeInvR.current, ...items];
-      setHypeInv([...hypeInvR.current]);
-      markHistAction(entry.at, {actionTaken:"seized"});
-      _snd.play('jackpot');
-      showNotif(`📦 ยึดทรัพย์ได้ ${count} ชิ้น — ดูในกระแส!`, "#c084fc");
+      // โอกาสโหด: high 6%, mid 2%, low 0%
+      const jackpotChance = risk==="high" ? 0.06 : risk==="mid" ? 0.02 : 0;
+      const isJackpot = Math.random() < jackpotChance;
+
+      if (isJackpot) {
+        // สุ่มของ top-tier 1 ชิ้น — UR / GodTier / Limited
+        const jackpotPicks = [
+          () => { const rar=RARITY_TABLE.card.find(r=>r.r==="UR"); const ch=ANIME_CHARS[Math.floor(Math.random()*ANIME_CHARS.length)]; const bp=rar.bp[0]+Math.floor(Math.random()*(rar.bp[1]-rar.bp[0])); return {id:`h${Date.now()}${Math.random().toString(36).slice(2,5)}`,type:"card",name:`${ch} [UR]`,emoji:"🃏",rarity:"UR",rarityColor:rar.c,bp,listed:false,listPrice:null}; },
+          () => { const rar=RARITY_TABLE.figure.find(r=>r.r==="GodTier"); const s=ANIME_SERIES[Math.floor(Math.random()*ANIME_SERIES.length)]; const bp=rar.bp[0]+Math.floor(Math.random()*(rar.bp[1]-rar.bp[0])); return {id:`h${Date.now()}${Math.random().toString(36).slice(2,5)}`,type:"figure",name:`${s} Fig[GodTier]`,emoji:"🎎",rarity:"GodTier",rarityColor:rar.c,bp,listed:false,listPrice:null}; },
+          () => { const rar=RARITY_TABLE.gameid.find(r=>r.r==="Limited"); const g=GAME_TITLES[Math.floor(Math.random()*GAME_TITLES.length)]; const bp=rar.bp[0]+Math.floor(Math.random()*(rar.bp[1]-rar.bp[0])); return {id:`h${Date.now()}${Math.random().toString(36).slice(2,5)}`,type:"gameid",name:`${g} [Limited]`,emoji:"🎮",rarity:"Limited",rarityColor:rar.c,bp,listed:false,listPrice:null}; },
+        ];
+        const item = jackpotPicks[Math.floor(Math.random()*jackpotPicks.length)]();
+        hypeInvR.current = [...hypeInvR.current, item];
+        setHypeInv([...hypeInvR.current]);
+        markHistAction(entry.hid, {actionTaken:"seized"});
+        setConfetti(true); setTimeout(()=>setConfetti(false), 3000);
+        _snd.play('jackpot');
+        showNotif(`💎 ยึดของโหด!! ${item.emoji}${item.name} (฿${item.bp.toLocaleString()})`, "#f59e0b");
+      } else {
+        // ได้ของตามปกติ
+        const types = ["card","figure","gameid"];
+        const count = risk==="high" ? 2 : 1;
+        const items = Array.from({length:count}, ()=> {
+          const t = risk==="high" ? (Math.random()<0.55?"figure":"card") :
+                    risk==="low"  ? (Math.random()<0.6?"card":"gameid") :
+                    types[Math.floor(Math.random()*types.length)];
+          return genSeizeItemByRisk(t, risk);
+        });
+        hypeInvR.current = [...hypeInvR.current, ...items];
+        setHypeInv([...hypeInvR.current]);
+        markHistAction(entry.hid, {actionTaken:"seized"});
+        _snd.play('jackpot');
+        showNotif(`📦 ยึดทรัพย์ได้ ${count} ชิ้น — ดูในกระแส!`, "#c084fc");
+      }
     }
   };
 
@@ -4658,7 +4679,7 @@ function GameScreen({ session, initPlayers, client, onEnd }) {
             if (Math.random() < npc.defaultChance) {
               _snd.play('bust');
               showNotif(`💀 ${npc.name} เบี้ยวหนี! เสีย ฿${loan.amount.toLocaleString()}`, "#f87171");
-              newHistory.unshift({npcId:npc.id, name:npc.name, avatar:npc.avatar, riskColor:npc.riskColor, amount:loan.amount, status:"defaulted", actionTaken:null, at:Date.now()});
+              newHistory.unshift({hid:++loanHidR.current, npcId:npc.id, name:npc.name, avatar:npc.avatar, riskColor:npc.riskColor, amount:loan.amount, status:"defaulted", actionTaken:null, at:Date.now()});
             } else {
               const interest = Math.round(loan.amount * npc.rate);
               cashR.current += interest;
@@ -4669,7 +4690,7 @@ function GameScreen({ session, initPlayers, client, onEnd }) {
                 syncCash();
                 _snd.play('jackpot');
                 showNotif(`✅ ${npc.name} คืนต้นพร้อมดอก! +฿${(loan.amount+interest).toLocaleString()}`, "#4ade80");
-                newHistory.unshift({npcId:npc.id, name:npc.name, avatar:npc.avatar, riskColor:npc.riskColor, amount:loan.amount, status:"paid", at:Date.now()});
+                newHistory.unshift({hid:++loanHidR.current, npcId:npc.id, name:npc.name, avatar:npc.avatar, riskColor:npc.riskColor, amount:loan.amount, status:"paid", at:Date.now()});
               } else {
                 _snd.play('income');
                 showNotif(`💰 ดอกจาก ${npc.name}: +฿${interest.toLocaleString()} (${newRound}/${loan.totalRounds})`, "#4ade80");
@@ -5688,12 +5709,12 @@ const myRank = allP.findIndex(p=>p.isMe)+1;
                 <>
                   <div style={{fontSize:9,letterSpacing:3,color:"#ffffff20",marginBottom:8}}>📜 ประวัติ</div>
                   <div style={{display:"flex",flexDirection:"column",gap:5}}>
-                    {loanHistory.slice(0,10).map((h,i)=>{
+                    {loanHistory.slice(0,10).map((h)=>{
                       const paid = h.status==="paid";
                       const canAct = !paid && h.actionTaken===null;
-                      const pickingMethod = debtActionMode===h.at;
+                      const pickingMethod = debtActionMode===h.hid;
                       return (
-                        <div key={i} style={{
+                        <div key={h.hid??h.at} style={{
                           background:paid?"#4ade8008":h.actionTaken?"#ffffff05":"#f8717108",
                           border:`1px solid ${paid?"#4ade8020":h.actionTaken?"#ffffff10":"#f8717128"}`,
                           borderRadius:10,padding:"8px 10px",
@@ -5722,7 +5743,7 @@ const myRank = allP.findIndex(p=>p.isMe)+1;
                           {/* ปุ่มเลือกวิธี (ยังไม่ได้ทำอะไร) */}
                           {canAct && !pickingMethod && (
                             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:5,marginTop:8}}>
-                              <button onClick={()=>setDebtActionMode(h.at)} style={{
+                              <button onClick={()=>setDebtActionMode(h.hid)} style={{
                                 padding:"6px 0",borderRadius:7,border:"1px solid #fbbf2450",
                                 background:"#fbbf2412",color:"#fbbf24",cursor:"pointer",
                                 fontSize:10,fontFamily:G.font,fontWeight:700}}>💸 ทวงหนี้</button>
