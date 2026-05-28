@@ -246,6 +246,17 @@ const LOAN_NPCS = [
 ];
 const LENDING_UNLOCK_COST = 5000;
 
+// ── HYPE NEGOTIATION NPCs ──
+const NEGO_NPCS = [
+  {id:"ng1", name:"นักสะสม",    emoji:"🧑‍💼", style:"bargainer",  offerMin:0.58, offerMax:0.78, raiseChance:0.40, acceptChance:0.15},
+  {id:"ng2", name:"แฟนคลับ",   emoji:"🌸",  style:"eager",      offerMin:0.70, offerMax:0.88, raiseChance:0.25, acceptChance:0.30},
+  {id:"ng3", name:"เซียนของ",   emoji:"🔍",  style:"aggressive", offerMin:0.50, offerMax:0.68, raiseChance:0.50, acceptChance:0.08},
+  {id:"ng4", name:"เศรษฐีลับ",  emoji:"🤑",  style:"rich",       offerMin:0.82, offerMax:0.96, raiseChance:0.15, acceptChance:0.55},
+  {id:"ng5", name:"ผู้ซื้อลึกลับ",emoji:"🕵️", style:"mysterious", offerMin:0.60, offerMax:0.95, raiseChance:0.33, acceptChance:0.25},
+  {id:"ng6", name:"เด็กแว้น",   emoji:"🛵",  style:"casual",     offerMin:0.65, offerMax:0.80, raiseChance:0.30, acceptChance:0.20},
+  {id:"ng7", name:"นักลงทุน",   emoji:"📊",  style:"smart",      offerMin:0.72, offerMax:0.85, raiseChance:0.35, acceptChance:0.22},
+];
+
 const BOT_CHAT_POOL = [
   "ซื้อแล้ว รอขึ้น 📈","กราฟน่าสนใจมาก","HODL เดี๋ยวก็กลับ","ขาย 50% ก่อนดีกว่า",
   "ทองขึ้นแล้ว รีบซื้อ!","Crypto แดงหมด 😭","ใครอยากได้การ์ดมั้ย?",
@@ -3577,6 +3588,11 @@ function GameScreen({ session, initPlayers, client, onEnd }) {
   // ── MARKET DEMAND (ตลาดซื้อของที่ listing อยู่) ──
   const demandTickR = useRef(DEMAND_INTERVAL_MIN + Math.floor(Math.random()*(DEMAND_INTERVAL_MAX-DEMAND_INTERVAL_MIN)));
 
+  // ── HYPE NEGOTIATION ──
+  const negoR   = useRef([]); // [{id,listingId,listPrice,offerPrice,round,ttl,npc,item}]
+  const negoIdR = useRef(0);
+  const [negos, setNegos] = useState([]);
+
   // ── ADMIN PRICE LOCK (ป้องกัน server TICK ทับหลัง admin สั่ง) ──
   const priceAdminLockR = useRef(0); // timestamp (ms) ที่ lock จะหมด
 
@@ -3862,6 +3878,55 @@ function GameScreen({ session, initPlayers, client, onEnd }) {
     loanRequestsR.current = loanRequestsR.current.filter(r=>r.id!==reqId);
     setLoanRequests([...loanRequestsR.current]);
     _snd.play('beep');
+  };
+
+  // ── HYPE NEGOTIATION ──
+  const finishNego = (negoId) => {
+    negoR.current = negoR.current.filter(n=>n.id!==negoId);
+    setNegos([...negoR.current]);
+  };
+  const doAcceptNego = (negoId) => {
+    const nego = negoR.current.find(n=>n.id===negoId);
+    if (!nego) return;
+    cashR.current += nego.offerPrice;
+    syncCash();
+    hypeInvR.current = hypeInvR.current.filter(i=>i.id!==nego.item.id);
+    setHypeInv([...hypeInvR.current]);
+    mktplaceR.current = mktplaceR.current.filter(l=>l.id!==nego.listingId);
+    setMktplace([...mktplaceR.current]);
+    finishNego(negoId);
+    _snd.play('win');
+    showNotif(`✅ ขาย ${nego.item.emoji}${nego.item.name} +฿${nego.offerPrice.toLocaleString()}`, "#4ade80");
+  };
+  const doRejectNego = (negoId) => {
+    const nego = negoR.current.find(n=>n.id===negoId);
+    if (!nego) return;
+    const roll = Math.random();
+    if (roll < nego.npc.acceptChance) {
+      // NPC ยอมราคาที่ตั้งไว้
+      cashR.current += nego.listPrice;
+      syncCash();
+      hypeInvR.current = hypeInvR.current.filter(i=>i.id!==nego.item.id);
+      setHypeInv([...hypeInvR.current]);
+      mktplaceR.current = mktplaceR.current.filter(l=>l.id!==nego.listingId);
+      setMktplace([...mktplaceR.current]);
+      finishNego(negoId);
+      _snd.play('jackpot');
+      showNotif(`🎉 ${nego.npc.emoji}${nego.npc.name} ยอมราคา! +฿${nego.listPrice.toLocaleString()}`, "#fbbf24");
+    } else if (roll < nego.npc.acceptChance + nego.npc.raiseChance && nego.round < 2) {
+      // NPC เพิ่มราคา (round 2)
+      const raise = 0.08 + Math.random() * 0.12;
+      const newOffer = Math.min(nego.listPrice - 1, Math.round(nego.offerPrice * (1 + raise)));
+      negoR.current = negoR.current.map(n=>n.id===negoId ? {...n, offerPrice:newOffer, round:2, ttl:35} : n);
+      setNegos([...negoR.current]);
+      _snd.play('beep');
+      showNotif(`💬 ${nego.npc.emoji}${nego.npc.name} เพิ่มเป็น ฿${newOffer.toLocaleString()}`, "#38bdf8");
+    } else {
+      // NPC เดินออก
+      finishNego(negoId);
+      _snd.play('bust');
+      showNotif(`🚶 ${nego.npc.emoji}${nego.npc.name} เดินออกไปแล้ว`, "#ffffff44");
+    }
   };
 
   const myNW = () => {
@@ -4152,36 +4217,40 @@ function GameScreen({ session, initPlayers, client, onEnd }) {
       }
 
       nextEvR.current--;
+      let justSpawned = false;
       if (nextEvR.current <= 0) {
-        const ev = EVENTS[Math.floor(Math.random()*EVENTS.length)];
-        evR.current = ev; evTimerR.current = ev.dur;
-        setActiveEv({...ev, _ts:Date.now()}); setEvTimer(ev.dur);
-        _snd.play('event');
-        // กระทบ hype index ทันทีถ้า event นี้มี hypeEff
-        if (ev.hypeEff) {
-          Object.entries(ev.hypeEff).forEach(([t, mult]) => {
-            hypeIdxR.current[t] = Math.min(6.0, Math.max(0.15, hypeIdxR.current[t] * mult));
-          });
-          setHypeIdx({...hypeIdxR.current});
-        }
-        // RE/Gold ได้ income bonus เมื่อ event ดีๆ เกิด
-        if((ev.eff.realestate||0)>0.1){
-          const bonus=["CONDO","HOUSE","MALL"].reduce((s,id)=>s+((holdR.current[id]||0)*(ASSETS.find(a=>a.id===id)||{inc:0}).inc*3),0);
-          if(bonus>0){cashR.current+=bonus;syncCash();showNotif(`🏘️ อสังหาฯบูม! ค่าเช่าพิเศษ +${fmt(bonus)}`,"#fbbf24");}
-        }
-        if((ev.eff.gold||0)>0.1){
-          const bonus=["GOLD","SILV"].reduce((s,id)=>s+((holdR.current[id]||0)*(ASSETS.find(a=>a.id===id)||{inc:0}).inc*5),0);
-          if(bonus>0){cashR.current+=bonus;syncCash();showNotif(`✨ ทองบูม! ปันผลพิเศษ +${fmt(bonus)}`,"#f59e0b");}
-        }
         const [lo,hi] = cfg.evInt;
-        nextEvR.current = Math.floor(Math.random()*(hi-lo))+lo;
-        if(botsR.current.length>0){
-          const cb=botsR.current[Math.floor(Math.random()*botsR.current.length)];
-          const cmt=[`${ev.title} !!`,Math.random()<0.5?"รีบซื้อ!":"ระวังด้วยนะ!","โอ้โห แรงมาก!","ใครรู้ล่วงหน้าเนี่ย 😂"][Math.floor(Math.random()*4)];
-          setTimeout(()=>addChatMsg(cb.name,cmt),400+Math.random()*800);
+        if (!evR.current) {
+          // ไม่มี event active — spawn ใหม่ได้
+          const ev = EVENTS[Math.floor(Math.random()*EVENTS.length)];
+          evR.current = ev; evTimerR.current = ev.dur + 1; // +1 เพราะ decrement จะหักวินาทีแรกออก
+          setActiveEv({...ev}); setEvTimer(ev.dur);
+          justSpawned = true;
+          _snd.play('event');
+          if (ev.hypeEff) {
+            Object.entries(ev.hypeEff).forEach(([t, mult]) => {
+              hypeIdxR.current[t] = Math.min(6.0, Math.max(0.15, hypeIdxR.current[t] * mult));
+            });
+            setHypeIdx({...hypeIdxR.current});
+          }
+          if((ev.eff.realestate||0)>0.1){
+            const bonus=["CONDO","HOUSE","MALL"].reduce((s,id)=>s+((holdR.current[id]||0)*(ASSETS.find(a=>a.id===id)||{inc:0}).inc*3),0);
+            if(bonus>0){cashR.current+=bonus;syncCash();showNotif(`🏘️ อสังหาฯบูม! ค่าเช่าพิเศษ +${fmt(bonus)}`,"#fbbf24");}
+          }
+          if((ev.eff.gold||0)>0.1){
+            const bonus=["GOLD","SILV"].reduce((s,id)=>s+((holdR.current[id]||0)*(ASSETS.find(a=>a.id===id)||{inc:0}).inc*5),0);
+            if(bonus>0){cashR.current+=bonus;syncCash();showNotif(`✨ ทองบูม! ปันผลพิเศษ +${fmt(bonus)}`,"#f59e0b");}
+          }
+          if(botsR.current.length>0){
+            const cb=botsR.current[Math.floor(Math.random()*botsR.current.length)];
+            const cmt=[`${ev.title} !!`,Math.random()<0.5?"รีบซื้อ!":"ระวังด้วยนะ!","โอ้โห แรงมาก!","ใครรู้ล่วงหน้าเนี่ย 😂"][Math.floor(Math.random()*4)];
+            setTimeout(()=>addChatMsg(cb.name,cmt),400+Math.random()*800);
+          }
         }
+        // ไม่ว่าจะ spawn หรือไม่ — reset counter เสมอเพื่อป้องกัน tick ค้าง
+        nextEvR.current = Math.floor(Math.random()*(hi-lo))+lo;
       }
-      if (evTimerR.current > 0) {
+      if (!justSpawned && evTimerR.current > 0) {
         evTimerR.current--;
         setEvTimer(evTimerR.current);
         if (evTimerR.current <= 0) { evR.current=null; setActiveEv(null); }
@@ -4473,46 +4542,39 @@ function GameScreen({ session, initPlayers, client, onEnd }) {
           setLoanHistory([...loanHistoryR.current]);
         }
       }
-      // ── market demand: ตลาดสุ่มซื้อของที่ listing อยู่ ──
+      // ── market demand: NPC มาต่อรองราคา (แทน auto-buy เงียบๆ) ──
       demandTickR.current--;
+      // countdown nego TTL ทุก tick
+      if (negoR.current.length > 0) {
+        negoR.current = negoR.current.map(n=>({...n,ttl:n.ttl-1})).filter(n=>n.ttl>0);
+        setNegos([...negoR.current]);
+      }
       if (demandTickR.current <= 0) {
         demandTickR.current = DEMAND_INTERVAL_MIN + Math.floor(Math.random()*(DEMAND_INTERVAL_MAX-DEMAND_INTERVAL_MIN));
         const myListings = mktplaceR.current.filter(l=>l.sellerIsMe);
-        if (myListings.length > 0) {
-          const sold = [];
-          myListings.forEach(listing => {
-            const hypeIdx = hypeIdxR.current[listing.item.type] || 1;
-            const marketVal = listing.item.bp * hypeIdx;
-            const ratio = listing.price / Math.max(marketVal, 1);
-            // price multiplier: ถูกกว่าตลาด = โอกาสสูงขึ้น
-            const pMult = ratio <= 0.7 ? 2.2
-                        : ratio <= 0.85 ? 1.5
-                        : ratio <= 1.0  ? 1.0
-                        : ratio <= 1.3  ? 0.55
-                        : ratio <= 1.8  ? 0.2
-                        : 0.05;
-            const base = RARITY_DEMAND[listing.item.rarity] || 0.15;
-            const chance = Math.min(0.95, base * pMult * Math.min(hypeIdx, 2));
-            if (Math.random() < chance) sold.push(listing);
-          });
-          if (sold.length > 0) {
-            let totalGain = 0;
-            sold.forEach(listing => {
-              cashR.current += listing.price;
-              totalGain += listing.price;
-              hypeInvR.current = hypeInvR.current.filter(i => i.id !== listing.itemId);
-            });
-            syncCash();
-            setHypeInv([...hypeInvR.current]);
-            mktplaceR.current = mktplaceR.current.filter(l => !sold.some(s=>s.id===l.id));
-            setMktplace([...mktplaceR.current]);
-            _snd.play('win');
-            if (sold.length === 1) {
-              showNotif(`🛒 ตลาดซื้อ ${sold[0].item.emoji}${sold[0].item.name} +฿${sold[0].price.toLocaleString()}!`, "#fbbf24");
-            } else {
-              showNotif(`🛒 ตลาดซื้อ ${sold.length} ชิ้น! +฿${totalGain.toLocaleString()}`, "#fbbf24");
-            }
-          }
+        // กรอง listing ที่มี nego pending อยู่แล้ว
+        const busyListingIds = new Set(negoR.current.map(n=>n.listingId));
+        const eligible = myListings.filter(l=>!busyListingIds.has(l.id));
+        if (eligible.length > 0 && negoR.current.length < 3) {
+          // เลือก listing โดยคำนึง demand (listing ถูก/ดีมีโอกาสมากกว่า)
+          const listing = eligible[Math.floor(Math.random() * eligible.length)];
+          const npc = NEGO_NPCS[Math.floor(Math.random() * NEGO_NPCS.length)];
+          const offerPct = npc.offerMin + Math.random() * (npc.offerMax - npc.offerMin);
+          const offerPrice = Math.max(1, Math.round(listing.price * offerPct));
+          const nego = {
+            id: `neg${++negoIdR.current}`,
+            listingId: listing.id,
+            listPrice: listing.price,
+            offerPrice,
+            round: 1,
+            ttl: 45,
+            npc,
+            item: listing.item,
+          };
+          negoR.current = [...negoR.current, nego];
+          setNegos([...negoR.current]);
+          _snd.play('beep');
+          showNotif(`🤝 ${npc.emoji}${npc.name} สนใจ ${listing.item.emoji}${listing.item.name}!`, "#c084fc");
         }
       }
       boxTimerR.current--;
@@ -4888,13 +4950,12 @@ const myRank = allP.findIndex(p=>p.isMe)+1;
         </div>
       </div>
 
-      {activeEv && (
-        <div key={activeEv._ts||activeEv.id} style={{
+      {activeEv && evTimer > 0 && (
+        <div style={{
           margin:"8px 12px",padding:"11px 16px",borderRadius:13,
           background:"linear-gradient(135deg,#fbbf2418,#f59e0b0a)",
           border:"1px solid #fbbf2845",
           display:"flex",justifyContent:"space-between",alignItems:"center",
-          animation:"event-banner-in 0.4s cubic-bezier(0.34,1.56,0.64,1)",
           boxShadow:"0 4px 24px #fbbf2422, 0 0 0 1px #fbbf2415",
         }}>
           <div>
@@ -5647,21 +5708,13 @@ const myRank = allP.findIndex(p=>p.isMe)+1;
                           <div style={{minWidth:0}}>
                             <div style={{fontSize:10,fontWeight:700,color:item.rarityColor,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{item.name}</div>
                             <div style={{fontSize:8,color:"#ffffff33"}}>
-                              {item.rarity} · ทิ้งได้ <span style={{color:"#94a3b8"}}>{fmt(instantVal)}</span>
+                              {item.rarity} · มูลค่าตลาด <span style={{color:"#94a3b8"}}>{fmt(instantVal)}</span>
                             </div>
                           </div>
                         </div>
                         <div style={{display:"flex",gap:4,flexShrink:0,marginLeft:6}}>
                           {!item.listed ? (
-                            <>
-                              <button onClick={()=>sellHypeItem(item)} style={{padding:"5px 6px",borderRadius:6,
-                                border:"1px solid #94a3b833",
-                                background:"#94a3b808",
-                                color:"#94a3b8",
-                                cursor:"pointer",fontSize:8,fontFamily:G.font,fontWeight:700,textAlign:"center",lineHeight:1.3
-                              }}>ทิ้ง<br/><span style={{color:"#94a3b8"}}>{Math.round((1-HYPE_DEALER_CUT)*100)}%cut</span></button>
-                              <button onClick={()=>setListModal(item)} style={{padding:"5px 7px",borderRadius:6,border:"1px solid #fbbf2433",background:"#fbbf2410",color:"#fbbf24",cursor:"pointer",fontSize:9,fontFamily:G.font,fontWeight:700}}>ลงขาย</button>
-                            </>
+                            <button onClick={()=>setListModal(item)} style={{padding:"6px 10px",borderRadius:6,border:"1px solid #fbbf2433",background:"#fbbf2410",color:"#fbbf24",cursor:"pointer",fontSize:9,fontFamily:G.font,fontWeight:700}}>ลงขาย</button>
                           ) : (
                             <button onClick={()=>delistItem(item)} style={{padding:"5px 7px",borderRadius:6,border:"1px solid #f8717133",background:"#f8717110",color:"#f87171",cursor:"pointer",fontSize:9,fontFamily:G.font,fontWeight:700,textAlign:"center",lineHeight:1.3}}>ยกเลิก<br/>฿{(item.listPrice||0).toLocaleString()}</button>
                           )}
@@ -5673,11 +5726,74 @@ const myRank = allP.findIndex(p=>p.isMe)+1;
               )}
             </div>
 
+            {/* ── Negotiation Cards ── */}
+            {negos.length > 0 && (
+              <div style={{marginBottom:14}}>
+                <div style={{fontSize:9,letterSpacing:3,color:"#c084fc88",marginBottom:8}}>🤝 กำลังต่อรอง ({negos.length})</div>
+                <div style={{display:"flex",flexDirection:"column",gap:7}}>
+                  {negos.map(nego=>{
+                    const pct = Math.round((nego.offerPrice/nego.listPrice)*100);
+                    const urgentTtl = nego.ttl <= 12;
+                    return (
+                      <div key={nego.id} style={{
+                        borderRadius:12, padding:"10px 12px",
+                        background:"linear-gradient(135deg,#c084fc12,#818cf808)",
+                        border:`1px solid ${urgentTtl?"#f8717155":"#c084fc35"}`,
+                        animation: urgentTtl ? "urgent-pulse 0.8s ease infinite" : undefined,
+                      }}>
+                        {/* Header */}
+                        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:7}}>
+                          <div style={{display:"flex",alignItems:"center",gap:6}}>
+                            <span style={{fontSize:18}}>{nego.npc.emoji}</span>
+                            <div>
+                              <div style={{fontSize:10,fontWeight:700,color:"#c084fc"}}>{nego.npc.name}</div>
+                              <div style={{fontSize:8,color:"#ffffff33"}}>รอบที่ {nego.round}/2 · สินค้า {nego.item.emoji}{nego.item.name}</div>
+                            </div>
+                          </div>
+                          <div style={{textAlign:"right"}}>
+                            <div style={{fontSize:16,fontWeight:900,color:urgentTtl?"#f87171":"#c084fc",fontVariantNumeric:"tabular-nums"}}>{nego.ttl}s</div>
+                            <div style={{fontSize:7,color:"#ffffff33"}}>เหลือ</div>
+                          </div>
+                        </div>
+                        {/* Offer */}
+                        <div style={{background:"#ffffff06",borderRadius:8,padding:"8px 10px",marginBottom:8,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                          <div>
+                            <div style={{fontSize:8,color:"#ffffff33",marginBottom:2}}>ราคาเสนอ <span style={{color:pct>=90?"#4ade80":pct>=75?"#fbbf24":"#f87171"}}>{pct}% ของราคาตั้ง</span></div>
+                            <div style={{fontSize:18,fontWeight:900,color:"#fff"}}>฿{nego.offerPrice.toLocaleString()}</div>
+                          </div>
+                          <div style={{textAlign:"right",fontSize:8,color:"#ffffff33"}}>
+                            <div>ราคาตั้ง</div>
+                            <div style={{color:"#fbbf24",fontWeight:700}}>฿{nego.listPrice.toLocaleString()}</div>
+                          </div>
+                        </div>
+                        {/* Buttons */}
+                        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6}}>
+                          <button onClick={()=>doAcceptNego(nego.id)} style={{
+                            padding:"8px 0",borderRadius:8,border:"1px solid #4ade8055",
+                            background:"#4ade8018",color:"#4ade80",cursor:"pointer",
+                            fontSize:11,fontFamily:G.font,fontWeight:700,
+                          }}>✅ ยอม ฿{nego.offerPrice.toLocaleString()}</button>
+                          <button onClick={()=>doRejectNego(nego.id)} style={{
+                            padding:"8px 0",borderRadius:8,border:"1px solid #f8717155",
+                            background:"#f8717118",color:"#f87171",cursor:"pointer",
+                            fontSize:11,fontFamily:G.font,fontWeight:700,
+                          }}>❌ ไม่ยอม</button>
+                        </div>
+                        <div style={{fontSize:7,color:"#ffffff22",marginTop:5,textAlign:"center"}}>
+                          ถ้าไม่ยอม: บอทอาจเพิ่มราคา · ยอมราคาตั้ง · หรือเดินออก
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
             {/* Marketplace */}
             <div>
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
                 <div style={{fontSize:9,letterSpacing:3,color:"#ffffff20"}}>🏪 ห้องซื้อขาย ({mktplace.length} รายการ)</div>
-                <div style={{fontSize:7,color:"#fbbf2455",background:"#fbbf2408",padding:"2px 7px",borderRadius:5,border:"1px solid #fbbf2420"}}>🤖 ตลาดซื้ออัตโนมัติ</div>
+                <div style={{fontSize:7,color:"#c084fc55",background:"#c084fc08",padding:"2px 7px",borderRadius:5,border:"1px solid #c084fc20"}}>🤝 ต่อรองได้</div>
               </div>
               {mktplace.length===0 ? (
                 <div style={{textAlign:"center",padding:"20px",color:"#ffffff22",fontSize:11}}>ยังไม่มีรายการ<br/>ลองลงขายดูสิ!</div>
@@ -6176,6 +6292,7 @@ ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
 @keyframes price-flash-dn { 0%,100%{ background:transparent; } 30%{ background:#f8717128; box-shadow: inset 0 0 14px #f8717115; } }
 @keyframes event-banner-in { from { opacity:0; transform:translateY(-14px) scale(0.95); } to { opacity:1; transform:translateY(0) scale(1); } }
 @keyframes notif-in { from { opacity:0; transform:translateX(-50%) translateY(-18px) scale(0.88); } to { opacity:1; transform:translateX(-50%) translateY(0) scale(1); } }
+@keyframes urgent-pulse { 0%,100%{border-color:#f8717155;box-shadow:none} 50%{border-color:#f87171cc;box-shadow:0 0 12px #f8717133} }
 @keyframes modal-slide-up { from { transform:translateY(50px); opacity:0; } to { transform:translateY(0); opacity:1; } }
 @keyframes fade-in { from { opacity:0; } to { opacity:1; } }
 @keyframes tab-in { from { opacity:0; transform:translateY(10px); } to { opacity:1; transform:translateY(0); } }
