@@ -4375,25 +4375,23 @@ function GameScreen({ session, initPlayers, client, onEnd }) {
 
       // horse race is now solo/modal-driven (no tick needed here)
 
-      // NPC marketplace buyers (every 10 ticks) — เงินมาจากระบบ ไม่หักจากผู้เล่นหรือ bot คนไหน
-      if(tickR.current % 10 === 0){
-        const NPC_NAMES = ["คนแปลกหน้า🧑","นักสะสม🎒","แฟนอนิเม🌸","เซียนของหายาก🔍",
-          "เด็กรวย💳","นักลงทุน🕵️","ลูกค้าออนไลน์📱","คนซื้อสด💵","ไม่รู้จัก🫥","ขาจร🚶"];
+      // NPC instant buy (rare — ส่วนใหญ่ซื้อผ่าน nego แล้ว)
+      if(tickR.current % 60 === 0){
+        const NPC_NAMES = ["คนแปลกหน้า🧑","แฟนพันธุ์แท้🌸","เศรษฐีซื้อสด💵","ไม่รู้จัก🫥"];
         const playerListings=mktplaceR.current.filter(l=>l.sellerIsMe);
-        playerListings.forEach(listing=>{
-          // ยิ่งแพงยิ่งซื้อยาก: โอกาสลดแบบ exponential ตามราคา
-          // ฿100→~22%  ฿500→~17%  ฿2K→~10%  ฿10K→~3%  ฿50K→~0.3%
-          const buyChance = 0.25 * Math.exp(-listing.price / 8000);
+        // ไม่ซื้อ listing ที่กำลัง nego อยู่
+        const busyIds = new Set(negoR.current.map(n=>n.listingId));
+        playerListings.filter(l=>!busyIds.has(l.id)).forEach(listing=>{
+          // โอกาสต่ำมาก: max 4% สำหรับของถูกที่สุด, แพงนิดเดียวก็แทบ 0
+          const buyChance = 0.04 * Math.exp(-listing.price / 3000);
           if(Math.random() < buyChance){
             const npcName = NPC_NAMES[Math.floor(Math.random()*NPC_NAMES.length)];
-            // เงินจากระบบ — ไม่ดึงจาก bot หรือ player คนไหน
             cashR.current += listing.price; syncCash();
             mktplaceR.current=mktplaceR.current.filter(l=>l.id!==listing.id);
             setMktplace([...mktplaceR.current]);
             hypeInvR.current=hypeInvR.current.filter(i=>i.id!==listing.itemId);
             setHypeInv([...hypeInvR.current]);
-            showNotif(`🛒 ${npcName} ซื้อ ${listing.item.name} +฿${listing.price.toLocaleString()}`,"#4ade80");
-            addChatMsg(npcName, `ได้ ${listing.item.emoji}${listing.item.name} มาแล้ว ขอบคุณ!`);
+            showNotif(`⚡ ${npcName} ซื้อทันที! +฿${listing.price.toLocaleString()}`,"#38bdf8");
           }
         });
         // Bots add own listings
